@@ -4,6 +4,7 @@
 
 **Kotlin, Spring Boot, Spring Modulith로 만든 프로덕션 지향 모듈러 모놀리스 템플릿**
 
+[![CI](https://github.com/hyunolike/kotlin-spring-modulith-template/actions/workflows/ci.yml/badge.svg)](https://github.com/hyunolike/kotlin-spring-modulith-template/actions/workflows/ci.yml)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
 [![Spring Modulith](https://img.shields.io/badge/Spring%20Modulith-1.4-6DB33F?logo=spring&logoColor=white)](https://spring.io/projects/spring-modulith)
