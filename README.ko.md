@@ -29,6 +29,7 @@
 - [새 모듈 추가하기](#새-모듈-추가하기)
 - [테스트](#테스트)
 - [설정 프로파일](#설정-프로파일)
+- [기여하기](#기여하기)
 - [참고 자료](#참고-자료)
 
 ## 주요 기능
@@ -185,6 +186,39 @@ sequenceDiagram
 |---|---|---|---|
 | default (local) | docker compose 자동 기동 | `update` | Swagger UI, SQL 로깅 활성화 |
 | `prod` | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` 환경변수 | `validate` | 마이그레이션 도구(Flyway 등) 사용 권장 |
+
+## 기여하기
+
+기여를 환영합니다! 버그 리포트, 기능 제안, PR 모두 이 템플릿을 더 좋게
+만드는 데 도움이 됩니다.
+
+1. **Fork** 후 `main`에서 브랜치를 생성합니다
+
+   ```bash
+   git checkout -b feat/amazing-feature
+   ```
+
+2. **변경 작업** — 모듈 경계 규칙을 지켜주세요
+   (전체 컨벤션은 [AGENTS.md](AGENTS.md) 참고)
+
+3. PR을 열기 전에 **검증**이 통과하는지 확인합니다
+
+   ```bash
+   ./gradlew clean build   # 테스트 + ktlint + detekt + 모듈 경계 검증
+   ```
+
+4. [Conventional Commits](https://www.conventionalcommits.org) 형식으로 **커밋**합니다
+
+   ```
+   feat: add payment module
+   fix: handle duplicate email on registration
+   docs: clarify event direction rule
+   ```
+
+5. 무엇을, 왜 변경했는지 명확히 적어 **Pull Request**를 엽니다
+
+규모가 있는 변경이라면 시간을 들이기 전에 먼저 이슈를 열어 방향을
+논의해주세요.
 
 ## 참고 자료
 

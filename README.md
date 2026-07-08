@@ -30,6 +30,7 @@ simplicity.
 - [Adding a New Module](#adding-a-new-module)
 - [Testing](#testing)
 - [Configuration Profiles](#configuration-profiles)
+- [Contributing](#contributing)
 - [References](#references)
 
 ## Features
@@ -188,6 +189,39 @@ sequenceDiagram
 |---|---|---|---|
 | default (local) | auto-started via docker compose | `update` | Swagger UI, SQL logging enabled |
 | `prod` | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` env vars | `validate` | use a migration tool (e.g. Flyway) |
+
+## Contributing
+
+Contributions are welcome! Bug reports, feature suggestions, and pull
+requests all help make this template better.
+
+1. **Fork** the repository and create your branch from `main`
+
+   ```bash
+   git checkout -b feat/amazing-feature
+   ```
+
+2. **Make your changes** — keep the module boundary rules in mind
+   (see [AGENTS.md](AGENTS.md) for the full conventions)
+
+3. **Verify** everything passes before opening a PR
+
+   ```bash
+   ./gradlew clean build   # tests + ktlint + detekt + module boundary verification
+   ```
+
+4. **Commit** using [Conventional Commits](https://www.conventionalcommits.org)
+
+   ```
+   feat: add payment module
+   fix: handle duplicate email on registration
+   docs: clarify event direction rule
+   ```
+
+5. **Open a Pull Request** with a clear description of what and why
+
+For anything non-trivial, please open an issue first so we can discuss the
+direction before you invest time in it.
 
 ## References
 
