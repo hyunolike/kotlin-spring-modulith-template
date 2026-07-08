@@ -1,85 +1,160 @@
+<div align="center">
+
 # Kotlin Spring Modulith Template
 
-Kotlin + Spring Boot + [Spring Modulith](https://spring.io/projects/spring-modulith) 기반의
-모듈러 모놀리스 템플릿입니다. 패키지 = 모듈 경계 규칙을 테스트로 강제하고,
-모듈 간 통신은 파사드 인터페이스(동기)와 이벤트(비동기)로만 허용합니다.
+**A production-ready modular monolith template built with Kotlin, Spring Boot, and Spring Modulith**
 
-## 기술 스택
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![Spring Modulith](https://img.shields.io/badge/Spring%20Modulith-1.4-6DB33F?logo=spring&logoColor=white)](https://spring.io/projects/spring-modulith)
+[![JDK](https://img.shields.io/badge/JDK-21-437291?logo=openjdk&logoColor=white)](https://openjdk.org/projects/jdk/21/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org)
 
-- Kotlin 2.1 / Java 21 / Spring Boot 3.5 / Spring Modulith 1.4
-- Spring Data JPA + PostgreSQL, Event Publication Registry(JPA)
-- Testcontainers, springdoc-openapi, ktlint, detekt
+**English** | [한국어](README.ko.md)
 
-## 시작하기
+</div>
+
+---
+
+Package boundaries **are** module boundaries — and they are enforced by tests.
+Modules talk to each other only through facade interfaces (sync) and domain
+events (async), so you get microservice-grade boundaries with monolith-grade
+simplicity.
+
+## Table of Contents
+
+- [Features](#features)
+- [Getting Started](#getting-started)
+- [Project Structure](#project-structure)
+- [Module Communication](#module-communication)
+- [Adding a New Module](#adding-a-new-module)
+- [Testing](#testing)
+- [Configuration Profiles](#configuration-profiles)
+- [References](#references)
+
+## Features
+
+- 🧱 **Enforced module boundaries** — `ApplicationModules.verify()` fails the build on any boundary violation or dependency cycle
+- 🔄 **Two communication patterns out of the box** — synchronous facade calls and asynchronous domain events, demonstrated with working `member`/`order` modules
+- 📬 **Reliable eventing** — Event Publication Registry persists every event to the `event_publication` table and republishes incomplete ones on restart
+- 🧪 **Module-level testing** — `@ApplicationModuleTest` bootstraps one module at a time, with the `Scenario` DSL for event flows and Testcontainers for PostgreSQL
+- 📐 **Living architecture docs** — C4 / PlantUML diagrams and module canvases generated from code by the Modulith `Documenter`
+- 🛡️ **Consistent API surface** — global exception handling, unified `ApiResponse<T>` envelope, request-ID (MDC) logging, Swagger UI
+- 🧹 **Code quality gates** — ktlint and detekt wired into the build
+- 🐳 **Zero-setup local run** — `compose.yaml` + spring-boot-docker-compose starts PostgreSQL automatically
+
+## Getting Started
+
+### Prerequisites
+
+- Docker (for local PostgreSQL and Testcontainers)
+- JDK 21 — auto-provisioned by the Gradle toolchain if missing
+
+### Run
 
 ```bash
-# Docker가 실행 중이어야 합니다. compose.yaml의 PostgreSQL이 자동 기동됩니다.
 ./gradlew bootRun
 ```
 
-- Swagger UI: http://localhost:8080/swagger-ui.html
-- 테스트: `./gradlew test` (Testcontainers가 PostgreSQL 컨테이너를 띄웁니다)
-- 린트: `./gradlew ktlintCheck detekt` / 자동 포맷: `./gradlew ktlintFormat`
+PostgreSQL from `compose.yaml` starts automatically. Then visit:
 
-## 패키지 구조
+- Swagger UI: http://localhost:8080/swagger-ui.html
+- Health check: http://localhost:8080/actuator/health
+
+### Try the API
+
+```bash
+# Register a member
+curl -X POST localhost:8080/api/v1/members \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Jane","email":"jane@example.com"}'
+
+# Place an order (order module validates the member via MemberApi)
+curl -X POST localhost:8080/api/v1/orders \
+  -H 'Content-Type: application/json' \
+  -d '{"memberId":1,"productName":"Keyboard","amount":120000}'
+
+# Deactivate the member → MemberDeactivatedEvent → orders are cancelled asynchronously
+curl -X POST localhost:8080/api/v1/members/1/deactivate
+curl "localhost:8080/api/v1/orders?memberId=1"   # status: CANCELLED
+```
+
+## Project Structure
 
 ```
 com.template
-├── shared/    # 공유 모듈 (OPEN) — 공통 응답, 예외, 설정
-├── member/    # 회원 모듈
-└── order/     # 주문 모듈 (member에 단방향 의존)
+├── TemplateApplication.kt     # Root: global infra config (@EnableAsync, @EnableJpaAuditing)
+├── shared/                    # Shared module (OPEN) — common response, errors, config
+│   ├── response/              #   ApiResponse, ErrorResponse
+│   ├── error/                 #   ErrorCode, BusinessException, GlobalExceptionHandler
+│   ├── domain/                #   BaseTimeEntity (JPA auditing)
+│   └── config/                #   OpenAPI config, MDC logging filter
+├── member/                    # Member module
+│   ├── MemberApi.kt           #   Facade interface        (public)
+│   ├── MemberInfo.kt          #   Public DTO              (public)
+│   ├── MemberStatus.kt        #   Public enum             (public)
+│   ├── MemberDeactivatedEvent.kt  # Domain event          (public)
+│   ├── application/           #   Use cases               (hidden)
+│   ├── domain/                #   Entity, repository      (hidden)
+│   └── presentation/          #   Controller, DTOs        (hidden)
+└── order/                     # Order module (one-way dependency on member)
+    ├── OrderInfo.kt / OrderStatus.kt
+    ├── application/           #   OrderService, MemberEventListener
+    ├── domain/
+    └── presentation/
 ```
 
-각 모듈의 **루트 패키지만 다른 모듈에 노출**됩니다 (파사드 인터페이스, 공개 DTO, 이벤트).
-`application` / `domain` / `presentation` 하위 패키지는 Spring Modulith가 자동으로 은닉하며,
-다른 모듈에서 import하면 `ModularityTests`가 실패합니다.
+Only the **root package of each module is visible** to other modules (facade
+interfaces, public DTOs, events). The `application` / `domain` /
+`presentation` sub-packages are hidden by Spring Modulith's default rules —
+importing them from another module fails `ModularityTests`.
 
-```
-member/
-├── MemberApi.kt               # 파사드 인터페이스 (공개)
-├── MemberInfo.kt              # 공개 DTO
-├── MemberStatus.kt            # 공개 enum
-├── MemberDeactivatedEvent.kt  # 공개 도메인 이벤트
-├── application/               # 유스케이스 (은닉)
-├── domain/                    # 엔티티, 리포지토리 (은닉)
-└── presentation/              # 컨트롤러, 요청/응답 DTO (은닉)
-```
+## Module Communication
 
-## 모듈 간 통신 규칙
-
-| 패턴 | 방법 | 예시 |
+| Pattern | How | Example in this template |
 |---|---|---|
-| 동기 호출 | 상대 모듈 루트의 파사드 인터페이스 | `OrderService` → `MemberApi.getMember()` |
-| 비동기 통지 | 도메인 이벤트 + `@ApplicationModuleListener` | `MemberDeactivatedEvent` → order 모듈이 주문 취소 |
+| Synchronous call | Facade interface in the target module's root | `OrderService` → `MemberApi.getMember()` |
+| Asynchronous notification | Domain event + `@ApplicationModuleListener` | `MemberDeactivatedEvent` → order module cancels the member's orders |
 
-이벤트 소비자는 발행자의 이벤트 타입에 의존하므로, **동기 호출과 이벤트 소비는
-같은 방향이어야 순환이 생기지 않습니다** (이 템플릿: order → member 단방향).
+> **Rule of thumb:** an event consumer compiles against the publisher's event
+> type. To stay cycle-free, synchronous calls and event consumption must point
+> in the **same direction** — in this template, strictly `order → member`.
 
-이벤트는 Event Publication Registry(`event_publication` 테이블)에 기록되어
-리스너 실패 시 이력이 남고, `republish-outstanding-events-on-restart=true`로
-재기동 시 미완료 이벤트를 재발행합니다.
+Events are persisted in the Event Publication Registry (`event_publication`
+table). If a listener fails, the record remains incomplete, and
+`republish-outstanding-events-on-restart=true` replays it on the next startup.
 
-## 새 모듈 추가 체크리스트
+## Adding a New Module
 
-1. `com.template.<모듈명>` 패키지 생성
-2. 모듈 루트에 공개 계약만 배치: 파사드 인터페이스, 공개 DTO, 이벤트
-3. 구현은 `application` / `domain` / `presentation` 하위 패키지에 배치
-4. 다른 모듈 접근은 파사드 호출 또는 이벤트 수신으로만 (순환 의존 금지)
-5. `@ApplicationModuleTest` 모듈 테스트 작성 (의존 모듈 파사드는 `@MockitoBean`으로 대체)
-6. `./gradlew test --tests "com.template.ModularityTests"` 로 경계 검증
+1. Create a `com.template.<module>` package
+2. Put only the public contract in the module root: facade interface, public DTOs, events
+3. Implement inside `application` / `domain` / `presentation` sub-packages
+4. Reach other modules only via facades or events — never create cycles
+5. Write an `@ApplicationModuleTest` (mock dependency facades with `@MockitoBean`)
+6. Run `./gradlew test --tests "com.template.ModularityTests"` to verify boundaries
 
-## 모듈 문서 생성
+## Testing
 
-`ModularityTests`의 문서 생성 테스트가 `build/spring-modulith-docs/`에
-C4·PlantUML 다이어그램과 모듈 캔버스(AsciiDoc)를 생성합니다.
+```bash
+./gradlew test                 # all tests (Testcontainers spins up PostgreSQL)
+./gradlew ktlintCheck detekt   # lint & static analysis
+./gradlew ktlintFormat         # auto-format
+```
 
-## 프로파일
+- `ModularityTests` — verifies module boundaries and generates architecture
+  docs (C4 / PlantUML + module canvases) into `build/spring-modulith-docs/`
+- `MemberModuleTests` / `OrderModuleTests` — module-scoped tests using the
+  `Scenario` DSL to assert event publication and consumption
 
-- 기본(local): docker-compose 자동 연동, `ddl-auto: update`
-- `prod`: `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` 환경변수 필요, `ddl-auto: validate`
+## Configuration Profiles
 
-## 참고 자료
+| Profile | Database | DDL | Notes |
+|---|---|---|---|
+| default (local) | auto-started via docker compose | `update` | Swagger UI, SQL logging enabled |
+| `prod` | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` env vars | `validate` | use a migration tool (e.g. Flyway) |
 
-- [Spring Modulith Reference](https://docs.spring.io/spring-modulith/reference/)
-- [카카오뱅크 — 레거시에서 모듈러 모놀리스로](https://tech.kakaobank.com/posts/2507-legacy-to-modular-monolith-with-spring-modulith/)
+## References
+
+- [Spring Modulith Reference Documentation](https://docs.spring.io/spring-modulith/reference/)
+- [KakaoBank — From Legacy to Modular Monolith with Spring Modulith](https://tech.kakaobank.com/posts/2507-legacy-to-modular-monolith-with-spring-modulith/) (Korean)
 - [team-dodn/spring-boot-kotlin-template](https://github.com/team-dodn/spring-boot-kotlin-template)
