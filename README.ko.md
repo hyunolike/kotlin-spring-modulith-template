@@ -9,6 +9,7 @@
 [![Spring Modulith](https://img.shields.io/badge/Spring%20Modulith-1.4-6DB33F?logo=spring&logoColor=white)](https://spring.io/projects/spring-modulith)
 [![JDK](https://img.shields.io/badge/JDK-21-437291?logo=openjdk&logoColor=white)](https://openjdk.org/projects/jdk/21/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 [English](README.md) | **한국어**
 
@@ -30,6 +31,7 @@
 - [테스트](#테스트)
 - [설정 프로파일](#설정-프로파일)
 - [기여하기](#기여하기)
+- [라이선스](#라이선스)
 - [참고 자료](#참고-자료)
 
 ## 주요 기능
@@ -219,6 +221,10 @@ sequenceDiagram
 
 규모가 있는 변경이라면 시간을 들이기 전에 먼저 이슈를 열어 방향을
 논의해주세요.
+
+## 라이선스
+
+이 프로젝트는 [MIT License](LICENSE)로 배포됩니다.
 
 ## 참고 자료
 

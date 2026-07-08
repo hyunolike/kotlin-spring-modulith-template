@@ -9,6 +9,7 @@
 [![Spring Modulith](https://img.shields.io/badge/Spring%20Modulith-1.4-6DB33F?logo=spring&logoColor=white)](https://spring.io/projects/spring-modulith)
 [![JDK](https://img.shields.io/badge/JDK-21-437291?logo=openjdk&logoColor=white)](https://openjdk.org/projects/jdk/21/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **English** | [한국어](README.ko.md)
 
@@ -31,6 +32,7 @@ simplicity.
 - [Testing](#testing)
 - [Configuration Profiles](#configuration-profiles)
 - [Contributing](#contributing)
+- [License](#license)
 - [References](#references)
 
 ## Features
@@ -222,6 +224,10 @@ requests all help make this template better.
 
 For anything non-trivial, please open an issue first so we can discuss the
 direction before you invest time in it.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
 
 ## References
 
