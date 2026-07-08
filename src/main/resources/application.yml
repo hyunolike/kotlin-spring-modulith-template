@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: kotlin-spring-modulith-template
+  jpa:
+    hibernate:
+      ddl-auto: update # 템플릿 편의용. 운영에서는 validate + 마이그레이션 도구(Flyway 등) 권장
+    open-in-view: false
+    properties:
+      hibernate:
+        default_batch_fetch_size: 100
+  modulith:
+    republish-outstanding-events-on-restart: true
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
