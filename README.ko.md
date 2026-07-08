@@ -114,13 +114,48 @@ com.template
 | 동기 호출 | 상대 모듈 루트의 파사드 인터페이스 | `OrderService` → `MemberApi.getMember()` |
 | 비동기 통지 | 도메인 이벤트 + `@ApplicationModuleListener` | `MemberDeactivatedEvent` → order 모듈이 해당 회원 주문 취소 |
 
+컴파일 의존은 한 방향으로만 향하고, 비즈니스 흐름은 런타임에 이벤트로 되돌아옵니다:
+
+```mermaid
+graph LR
+    order["📦 order"]
+    member["📦 member"]
+    shared["📦 shared (OPEN)"]
+
+    order -- "MemberApi 호출<br/>(컴파일 의존, 동기)" --> member
+    member -. "MemberDeactivatedEvent<br/>(런타임, 비동기)" .-> order
+    order --> shared
+    member --> shared
+```
+
 > **핵심 규칙:** 이벤트 소비자는 발행자의 이벤트 타입에 컴파일 의존합니다.
 > 순환을 피하려면 동기 호출과 이벤트 소비가 **같은 방향**이어야 합니다 —
 > 이 템플릿에서는 엄격하게 `order → member` 단방향입니다.
 
 이벤트는 Event Publication Registry(`event_publication` 테이블)에 저장됩니다.
 리스너가 실패하면 미완료 기록이 남고, `republish-outstanding-events-on-restart=true`
-설정으로 다음 기동 시 재발행됩니다.
+설정으로 다음 기동 시 재발행됩니다:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as 클라이언트
+    participant M as member 모듈
+    participant R as Event Publication Registry<br/>(event_publication 테이블)
+    participant O as order 모듈
+
+    C->>M: POST /api/v1/members/{id}/deactivate
+    M->>M: Member.deactivate()
+    M->>R: MemberDeactivatedEvent 저장 (같은 트랜잭션)
+    M-->>C: 200 OK
+
+    Note over R,O: 커밋 후 — 비동기, 새 트랜잭션
+    R->>O: @ApplicationModuleListener MemberEventListener.on(event)
+    O->>O: 해당 회원의 PLACED 주문 전체 취소
+    O->>R: 발행 기록을 완료로 마킹
+
+    Note over R: 미완료 발행 건은<br/>재기동 시 재발행
+```
 
 ## 새 모듈 추가하기
 

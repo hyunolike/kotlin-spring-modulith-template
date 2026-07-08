@@ -116,13 +116,49 @@ importing them from another module fails `ModularityTests`.
 | Synchronous call | Facade interface in the target module's root | `OrderService` → `MemberApi.getMember()` |
 | Asynchronous notification | Domain event + `@ApplicationModuleListener` | `MemberDeactivatedEvent` → order module cancels the member's orders |
 
+Compile-time dependencies point in one direction only; business flows travel
+back through events at runtime:
+
+```mermaid
+graph LR
+    order["📦 order"]
+    member["📦 member"]
+    shared["📦 shared (OPEN)"]
+
+    order -- "MemberApi call<br/>(compile-time, sync)" --> member
+    member -. "MemberDeactivatedEvent<br/>(runtime, async)" .-> order
+    order --> shared
+    member --> shared
+```
+
 > **Rule of thumb:** an event consumer compiles against the publisher's event
 > type. To stay cycle-free, synchronous calls and event consumption must point
 > in the **same direction** — in this template, strictly `order → member`.
 
 Events are persisted in the Event Publication Registry (`event_publication`
 table). If a listener fails, the record remains incomplete, and
-`republish-outstanding-events-on-restart=true` replays it on the next startup.
+`republish-outstanding-events-on-restart=true` replays it on the next startup:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant M as member module
+    participant R as Event Publication Registry<br/>(event_publication table)
+    participant O as order module
+
+    C->>M: POST /api/v1/members/{id}/deactivate
+    M->>M: Member.deactivate()
+    M->>R: persist MemberDeactivatedEvent (same transaction)
+    M-->>C: 200 OK
+
+    Note over R,O: after commit — async, new transaction
+    R->>O: @ApplicationModuleListener MemberEventListener.on(event)
+    O->>O: cancel all PLACED orders of the member
+    O->>R: mark publication as completed
+
+    Note over R: incomplete publications are<br/>republished on restart
+```
 
 ## Adding a New Module
 
