@@ -18,9 +18,20 @@
 
 ---
 
-패키지 경계가 **곧** 모듈 경계이며, 이 규칙은 테스트로 강제됩니다.
+<table>
+<tr>
+<td width="38%" align="center">
+<img width="260" alt="Spring Modulith module diagram" src="https://github.com/user-attachments/assets/a1403171-6f70-4fe2-8143-eb5b91cc013d" />
+</td>
+<td width="62%" valign="top">
+패키지 경계가 곧 모듈 경계이며, 이 규칙은 테스트로 강제됩니다.
 모듈 간 통신은 파사드 인터페이스(동기)와 도메인 이벤트(비동기)로만 허용되어,
 모놀리스의 단순함을 유지하면서 마이크로서비스 수준의 경계를 얻을 수 있습니다.
+</td>
+</tr>
+</table>
+
+
 
 ## 목차
 
