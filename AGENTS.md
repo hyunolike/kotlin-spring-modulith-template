@@ -54,7 +54,7 @@ Modulith modules: `shared` (OPEN), `member`, `order`.
 
 - Kotlin can't express package-level annotations: module metadata such as
   `@ApplicationModule(type = OPEN)` lives in `src/main/java/**/package-info.java`.
-- detekt runs with a pinned Kotlin version and ktlint is pinned to 1.6.0 in
+- detekt runs with a pinned Kotlin version and ktlint is pinned to 1.7.1 in
   `build.gradle.kts` — do not remove those pins when bumping versions.
 - Local compose maps PostgreSQL to host port **5433** (5432 is often taken);
   spring-boot-docker-compose auto-detects the mapped port.
