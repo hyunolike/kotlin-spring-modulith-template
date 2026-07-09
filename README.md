@@ -39,6 +39,7 @@ simplicity.
 ## Features
 
 - 🧱 **Enforced module boundaries** — `ApplicationModules.verify()` fails the build on any boundary violation or dependency cycle
+- 🚦 **Startup verification** — the same module verification runs again when the application boots (`spring-modulith-runtime`); a violated architecture never reaches runtime
 - 🔄 **Two communication patterns out of the box** — synchronous facade calls and asynchronous domain events, demonstrated with working `member`/`order` modules
 - 📬 **Reliable eventing** — Event Publication Registry persists every event to the `event_publication` table and republishes incomplete ones on restart
 - 🧪 **Module-level testing** — `@ApplicationModuleTest` bootstraps one module at a time, with the `Scenario` DSL for event flows and Testcontainers for PostgreSQL

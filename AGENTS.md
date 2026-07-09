@@ -33,6 +33,9 @@ Modulith modules: `shared` (OPEN), `member`, `order`.
   module's repository, service, or entity.
 - `ApplicationModules.verify()` in `ModularityTests` fails the build on any
   violation. Fix the code, never relax the verification.
+- The same verification also runs at application startup
+  (`spring-modulith-runtime` + `spring.modulith.runtime.verification-enabled`)
+  — a violation prevents the app from booting.
 
 ## Conventions
 
@@ -54,6 +57,11 @@ Modulith modules: `shared` (OPEN), `member`, `order`.
 
 - Kotlin can't express package-level annotations: module metadata such as
   `@ApplicationModule(type = OPEN)` lives in `src/main/java/**/package-info.java`.
+  Each module's `package-info.java` Javadoc doubles as the module description
+  in Documenter-generated docs (Modulith 2.0+).
+- Modulith config properties live under `spring.modulith.events.*` /
+  `spring.modulith.runtime.*` — the bare `spring.modulith.republish-…` path is
+  deprecated since 1.3.
 - detekt runs with a pinned Kotlin version and ktlint is pinned to 1.7.1 in
   `build.gradle.kts` — do not remove those pins when bumping versions.
 - Local compose maps PostgreSQL to host port **5433** (5432 is often taken);

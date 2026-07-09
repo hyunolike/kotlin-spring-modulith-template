@@ -38,6 +38,7 @@
 ## 주요 기능
 
 - 🧱 **강제되는 모듈 경계** — `ApplicationModules.verify()`가 경계 위반·순환 의존을 빌드 실패로 잡아냄
+- 🚦 **기동 시 검증** — 애플리케이션 부팅 시에도 동일한 모듈 검증 실행(`spring-modulith-runtime`); 경계가 깨진 아키텍처는 런타임에 도달하지 못함
 - 🔄 **두 가지 통신 패턴 기본 제공** — 동기 파사드 호출과 비동기 도메인 이벤트를 실제 동작하는 `member`/`order` 모듈로 시연
 - 📬 **신뢰할 수 있는 이벤트** — Event Publication Registry가 모든 이벤트를 `event_publication` 테이블에 기록하고, 미완료 이벤트를 재기동 시 재발행
 - 🧪 **모듈 단위 테스트** — `@ApplicationModuleTest`로 모듈 하나만 부트스트랩, `Scenario` DSL로 이벤트 흐름 검증, Testcontainers PostgreSQL 사용
