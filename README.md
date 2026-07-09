@@ -18,10 +18,19 @@
 
 ---
 
-Package boundaries **are** module boundaries — and they are enforced by tests.
+<table>
+<tr>
+<td width="38%" align="center">
+<img width="260" alt="Spring Modulith module diagram" src="https://github.com/user-attachments/assets/a1403171-6f70-4fe2-8143-eb5b91cc013d" />
+</td>
+<td width="62%" valign="top">
+Package boundaries are module boundaries — and they are enforced by tests.
 Modules talk to each other only through facade interfaces (sync) and domain
 events (async), so you get microservice-grade boundaries with monolith-grade
 simplicity.
+</td>
+</tr>
+</table>
 
 ## Table of Contents
 
