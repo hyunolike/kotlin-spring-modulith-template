@@ -28,7 +28,7 @@ jobs:
           java-version: 21
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       # build = 컴파일 + 테스트(Testcontainers) + ktlint + detekt + 모듈 경계 검증
       - name: Build & verify
