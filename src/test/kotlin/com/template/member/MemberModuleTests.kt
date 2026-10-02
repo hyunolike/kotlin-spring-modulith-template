@@ -14,6 +14,7 @@ import org.springframework.dao.OptimisticLockingFailureException
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.modulith.test.ApplicationModuleTest
 import org.springframework.modulith.test.Scenario
+import org.springframework.transaction.IllegalTransactionStateException
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.TransactionDefinition
 import org.springframework.transaction.support.TransactionTemplate
@@ -113,5 +114,13 @@ class MemberModuleTests(
                 stale.deactivate() // 읽은 시점 기준으로는 ACTIVE라 검증을 통과한다
             }
         }.isInstanceOf(OptimisticLockingFailureException::class.java)
+    }
+
+    @Test
+    fun `공유 락 조회는 호출자 트랜잭션 없이 쓸 수 없다`() {
+        val member = memberService.register("락회원", "lock@example.com")
+
+        assertThatThrownBy { memberService.getMemberWithSharedLock(member.id) }
+            .isInstanceOf(IllegalTransactionStateException::class.java)
     }
 }

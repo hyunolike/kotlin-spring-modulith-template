@@ -49,6 +49,11 @@ Modulith modules: `shared` (OPEN), `member`, `order`.
   `CONCURRENT_MODIFICATION`. A pre-check like `existsByEmail` is not race-safe —
   back it with a DB unique constraint and translate
   `DataIntegrityViolationException` into the matching `BusinessException`.
+- When a module writes based on another module's state (e.g. `order` placing
+  an order only for an ACTIVE member), read that state through a locking
+  facade method (`MemberApi.getMemberWithSharedLock`, `FOR SHARE`,
+  `Propagation.MANDATORY`). A plain read lets the state change commit before
+  the write does, and the change event's listener then misses the new row.
 - Async work (`@ApplicationModuleListener`) inherits the request's MDC via
   `MdcTaskDecorator`, so logs keep the same `requestId`.
 - Global infrastructure annotations (`@EnableAsync`, `@EnableJpaAuditing`)

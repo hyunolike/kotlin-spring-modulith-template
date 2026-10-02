@@ -31,7 +31,7 @@ class OrderModuleTests(
 
     @Test
     fun `활성 회원은 주문할 수 있다`() {
-        given(memberApi.getMember(1L)).willReturn(activeMember(1L))
+        given(memberApi.getMemberWithSharedLock(1L)).willReturn(activeMember(1L))
 
         val order = orderService.placeOrder(1L, "기계식 키보드", BigDecimal("120000"))
 
@@ -41,7 +41,7 @@ class OrderModuleTests(
 
     @Test
     fun `비활성화된 회원은 주문할 수 없다`() {
-        given(memberApi.getMember(2L)).willReturn(
+        given(memberApi.getMemberWithSharedLock(2L)).willReturn(
             activeMember(2L).copy(status = MemberStatus.DEACTIVATED),
         )
 
@@ -53,7 +53,7 @@ class OrderModuleTests(
 
     @Test
     fun `존재하지 않는 회원의 주문은 실패한다`() {
-        given(memberApi.getMember(99L)).willThrow(BusinessException(ErrorCode.MEMBER_NOT_FOUND))
+        given(memberApi.getMemberWithSharedLock(99L)).willThrow(BusinessException(ErrorCode.MEMBER_NOT_FOUND))
 
         assertThatThrownBy { orderService.placeOrder(99L, "마우스", BigDecimal("45000")) }
             .isInstanceOf(BusinessException::class.java)
@@ -63,7 +63,7 @@ class OrderModuleTests(
 
     @Test
     fun `회원 비활성화 이벤트를 받으면 해당 회원의 주문을 모두 취소한다`(scenario: Scenario) {
-        given(memberApi.getMember(3L)).willReturn(activeMember(3L))
+        given(memberApi.getMemberWithSharedLock(3L)).willReturn(activeMember(3L))
         orderService.placeOrder(3L, "노트북 거치대", BigDecimal("35000"))
         orderService.placeOrder(3L, "USB 허브", BigDecimal("28000"))
 

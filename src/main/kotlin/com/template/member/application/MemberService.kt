@@ -11,6 +11,7 @@ import org.springframework.context.ApplicationEventPublisher
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
 
 @Service
@@ -36,6 +37,12 @@ class MemberService(
     }
 
     override fun getMember(memberId: Long): MemberInfo = findMember(memberId).toInfo()
+
+    // 락은 호출자 트랜잭션이 끝날 때 풀리므로, 트랜잭션 없이 호출되면 의미가 없다 → MANDATORY
+    @Transactional(propagation = Propagation.MANDATORY)
+    override fun getMemberWithSharedLock(memberId: Long): MemberInfo =
+        (memberRepository.findWithSharedLockById(memberId) ?: throw BusinessException(ErrorCode.MEMBER_NOT_FOUND))
+            .toInfo()
 
     @Transactional
     fun deactivate(memberId: Long) {

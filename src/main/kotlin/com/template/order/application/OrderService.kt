@@ -23,7 +23,9 @@ class OrderService(
         productName: String,
         amount: BigDecimal,
     ): OrderInfo {
-        val member = memberApi.getMember(memberId)
+        // 주문이 커밋될 때까지 회원 비활성화를 막는다. 락 없이 조회하면 그 사이 비활성화가 커밋되고
+        // MemberDeactivatedEvent 리스너가 아직 커밋 전인 이 주문을 못 본 채 지나가 PLACED로 남는다.
+        val member = memberApi.getMemberWithSharedLock(memberId)
         if (member.status != MemberStatus.ACTIVE) {
             throw BusinessException(ErrorCode.MEMBER_DEACTIVATED)
         }
