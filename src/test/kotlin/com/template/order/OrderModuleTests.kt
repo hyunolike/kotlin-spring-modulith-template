@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test
 import org.mockito.BDDMockito.given
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.context.annotation.Import
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.modulith.test.ApplicationModuleTest
 import org.springframework.modulith.test.Scenario
 import org.springframework.test.context.bean.override.mockito.MockitoBean
@@ -23,13 +24,14 @@ import java.math.BigDecimal
 @Import(TestcontainersConfiguration::class)
 class OrderModuleTests(
     @Autowired private val orderService: OrderService,
+    @Autowired private val jdbcTemplate: JdbcTemplate,
 ) {
     @MockitoBean
     private lateinit var memberApi: MemberApi
 
     @Test
     fun `활성 회원은 주문할 수 있다`() {
-        given(memberApi.getMember(1L)).willReturn(activeMember(1L))
+        given(memberApi.getMemberWithSharedLock(1L)).willReturn(activeMember(1L))
 
         val order = orderService.placeOrder(1L, "기계식 키보드", BigDecimal("120000"))
 
@@ -39,7 +41,7 @@ class OrderModuleTests(
 
     @Test
     fun `비활성화된 회원은 주문할 수 없다`() {
-        given(memberApi.getMember(2L)).willReturn(
+        given(memberApi.getMemberWithSharedLock(2L)).willReturn(
             activeMember(2L).copy(status = MemberStatus.DEACTIVATED),
         )
 
@@ -51,7 +53,7 @@ class OrderModuleTests(
 
     @Test
     fun `존재하지 않는 회원의 주문은 실패한다`() {
-        given(memberApi.getMember(99L)).willThrow(BusinessException(ErrorCode.MEMBER_NOT_FOUND))
+        given(memberApi.getMemberWithSharedLock(99L)).willThrow(BusinessException(ErrorCode.MEMBER_NOT_FOUND))
 
         assertThatThrownBy { orderService.placeOrder(99L, "마우스", BigDecimal("45000")) }
             .isInstanceOf(BusinessException::class.java)
@@ -61,7 +63,7 @@ class OrderModuleTests(
 
     @Test
     fun `회원 비활성화 이벤트를 받으면 해당 회원의 주문을 모두 취소한다`(scenario: Scenario) {
-        given(memberApi.getMember(3L)).willReturn(activeMember(3L))
+        given(memberApi.getMemberWithSharedLock(3L)).willReturn(activeMember(3L))
         orderService.placeOrder(3L, "노트북 거치대", BigDecimal("35000"))
         orderService.placeOrder(3L, "USB 허브", BigDecimal("28000"))
 
@@ -73,6 +75,17 @@ class OrderModuleTests(
             ).andVerify { orders ->
                 assertThat(orders).hasSize(2)
             }
+    }
+
+    @Test
+    fun `회원별 주문 조회용 (member_id, status) 복합 인덱스가 있다`() {
+        val indexDefinitions =
+            jdbcTemplate.queryForList(
+                "select indexdef from pg_indexes where tablename = 'orders'",
+                String::class.java,
+            )
+
+        assertThat(indexDefinitions).anyMatch { it.contains("(member_id, status)") }
     }
 
     private fun activeMember(id: Long): MemberInfo =

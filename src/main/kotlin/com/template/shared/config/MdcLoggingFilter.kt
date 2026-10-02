@@ -15,7 +15,12 @@ class MdcLoggingFilter : OncePerRequestFilter() {
         response: HttpServletResponse,
         filterChain: FilterChain,
     ) {
-        val requestId = request.getHeader(REQUEST_ID_HEADER) ?: UUID.randomUUID().toString().substring(0, 8)
+        // 외부 입력을 그대로 로그·응답 헤더에 쓰지 않는다 (로그 인젝션, 과도한 길이 방지)
+        val requestId =
+            request
+                .getHeader(REQUEST_ID_HEADER)
+                ?.takeIf { VALID_REQUEST_ID.matches(it) }
+                ?: UUID.randomUUID().toString().substring(0, 8)
         MDC.put(MDC_KEY, requestId)
         response.setHeader(REQUEST_ID_HEADER, requestId)
         try {
@@ -28,5 +33,6 @@ class MdcLoggingFilter : OncePerRequestFilter() {
     companion object {
         const val REQUEST_ID_HEADER = "X-Request-Id"
         const val MDC_KEY = "requestId"
+        private val VALID_REQUEST_ID = Regex("^[A-Za-z0-9._-]{1,64}$")
     }
 }

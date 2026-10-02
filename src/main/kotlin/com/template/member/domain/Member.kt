@@ -12,6 +12,7 @@ import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.Table
+import jakarta.persistence.Version
 
 @Entity
 @Table(name = "members")
@@ -27,6 +28,10 @@ class Member(
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     var status: MemberStatus = MemberStatus.ACTIVE
+        protected set
+
+    @Version // 동시 수정 시 늦게 커밋한 쪽이 OptimisticLockingFailureException으로 실패한다
+    var version: Long = 0
         protected set
 
     fun deactivate() {
