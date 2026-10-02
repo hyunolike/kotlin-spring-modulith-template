@@ -2,6 +2,7 @@ package com.template.shared.error
 
 import com.template.shared.response.ApiResponse
 import org.slf4j.LoggerFactory
+import org.springframework.dao.OptimisticLockingFailureException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
@@ -37,6 +38,14 @@ class GlobalExceptionHandler {
         return ResponseEntity
             .status(HttpStatus.BAD_REQUEST)
             .body(ApiResponse.error(ErrorCode.INVALID_REQUEST))
+    }
+
+    @ExceptionHandler(OptimisticLockingFailureException::class)
+    fun handleOptimisticLockingFailure(e: OptimisticLockingFailureException): ResponseEntity<ApiResponse<Unit>> {
+        log.warn("OptimisticLockingFailureException: {}", e.message)
+        return ResponseEntity
+            .status(ErrorCode.CONCURRENT_MODIFICATION.status)
+            .body(ApiResponse.error(ErrorCode.CONCURRENT_MODIFICATION))
     }
 
     @ExceptionHandler(Exception::class)

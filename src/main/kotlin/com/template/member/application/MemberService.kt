@@ -8,6 +8,7 @@ import com.template.member.domain.MemberRepository
 import com.template.shared.error.BusinessException
 import com.template.shared.error.ErrorCode
 import org.springframework.context.ApplicationEventPublisher
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -26,7 +27,12 @@ class MemberService(
         if (memberRepository.existsByEmail(email)) {
             throw BusinessException(ErrorCode.DUPLICATE_EMAIL)
         }
-        return memberRepository.save(Member(name = name, email = email)).toInfo()
+        // 위 사전 검사는 동시 요청 사이의 경쟁을 막지 못한다. 최종 방어선은 email unique 제약이다.
+        return try {
+            memberRepository.saveAndFlush(Member(name = name, email = email)).toInfo()
+        } catch (e: DataIntegrityViolationException) {
+            throw BusinessException(ErrorCode.DUPLICATE_EMAIL, cause = e)
+        }
     }
 
     override fun getMember(memberId: Long): MemberInfo = findMember(memberId).toInfo()

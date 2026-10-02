@@ -44,6 +44,13 @@ Modulith modules: `shared` (OPEN), `member`, `order`.
   (`shared/error`) handled by `GlobalExceptionHandler`.
 - Entities extend `BaseTimeEntity` (JPA auditing) and use table names that
   avoid SQL reserved words (`members`, `orders`).
+- Mutable entities carry a `@Version` column (optimistic locking); the
+  resulting `OptimisticLockingFailureException` maps to 409
+  `CONCURRENT_MODIFICATION`. A pre-check like `existsByEmail` is not race-safe —
+  back it with a DB unique constraint and translate
+  `DataIntegrityViolationException` into the matching `BusinessException`.
+- Async work (`@ApplicationModuleListener`) inherits the request's MDC via
+  `MdcTaskDecorator`, so logs keep the same `requestId`.
 - Global infrastructure annotations (`@EnableAsync`, `@EnableJpaAuditing`)
   live on `TemplateApplication`, not in a module — `@ApplicationModuleTest`
   bootstraps a single module and would miss module-local config.
@@ -66,5 +73,9 @@ Modulith modules: `shared` (OPEN), `member`, `order`.
   `build.gradle.kts` — do not remove those pins when bumping versions.
 - Local compose maps PostgreSQL to host port **5433** (5432 is often taken);
   spring-boot-docker-compose auto-detects the mapped port.
+- Adding a non-null column (e.g. `@Version`) under `ddl-auto: update` can fail on
+  a local DB that already has rows — reset it with `docker compose down -v`.
+- Testcontainers tests need a UTF-8 locale (`LANG=C.UTF-8`) because Korean test
+  names become report file names.
 - `docs/` is intentionally git-ignored (local working documents).
 - CLAUDE.md is a symlink to this file — edit AGENTS.md only.

@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test
 import org.mockito.BDDMockito.given
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.context.annotation.Import
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.modulith.test.ApplicationModuleTest
 import org.springframework.modulith.test.Scenario
 import org.springframework.test.context.bean.override.mockito.MockitoBean
@@ -23,6 +24,7 @@ import java.math.BigDecimal
 @Import(TestcontainersConfiguration::class)
 class OrderModuleTests(
     @Autowired private val orderService: OrderService,
+    @Autowired private val jdbcTemplate: JdbcTemplate,
 ) {
     @MockitoBean
     private lateinit var memberApi: MemberApi
@@ -73,6 +75,17 @@ class OrderModuleTests(
             ).andVerify { orders ->
                 assertThat(orders).hasSize(2)
             }
+    }
+
+    @Test
+    fun `회원별 주문 조회용 (member_id, status) 복합 인덱스가 있다`() {
+        val indexDefinitions =
+            jdbcTemplate.queryForList(
+                "select indexdef from pg_indexes where tablename = 'orders'",
+                String::class.java,
+            )
+
+        assertThat(indexDefinitions).anyMatch { it.contains("(member_id, status)") }
     }
 
     private fun activeMember(id: Long): MemberInfo =
