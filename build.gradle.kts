@@ -52,8 +52,7 @@ dependencyManagement {
 kotlin {
     jvmToolchain(21)
     compilerOptions {
-        // annotation-default-target: Kotlin 2.2의 미래 기본값(param + property)을 미리 적용 (KT-73255)
-        freeCompilerArgs.addAll("-Xjsr305=strict", "-Xannotation-default-target=param-property")
+        freeCompilerArgs.addAll("-Xjsr305=strict")
     }
 }
 
