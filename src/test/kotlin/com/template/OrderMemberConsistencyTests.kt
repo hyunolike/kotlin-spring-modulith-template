@@ -45,7 +45,7 @@ class OrderMemberConsistencyTests(
                         orderPlaced.countDown()
                         releaseOrder.await()
                     }
-                }!!
+                }
             }
         assertThat(orderPlaced.await(10, TimeUnit.SECONDS)).isTrue()
 

@@ -85,7 +85,7 @@ class OrderModuleTests(
                 String::class.java,
             )
 
-        assertThat(indexDefinitions).anyMatch { it.contains("(member_id, status)") }
+        assertThat(indexDefinitions).anyMatch { it?.contains("(member_id, status)") == true }
     }
 
     private fun activeMember(id: Long): MemberInfo =
