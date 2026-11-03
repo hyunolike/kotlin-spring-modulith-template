@@ -53,7 +53,8 @@ simplicity.
 - 📬 **Reliable eventing** — Event Publication Registry persists every event to the `event_publication` table and republishes incomplete ones on restart
 - 🧪 **Module-level testing** — `@ApplicationModuleTest` bootstraps one module at a time, with the `Scenario` DSL for event flows and Testcontainers for PostgreSQL
 - 📐 **Living architecture docs** — C4 / PlantUML diagrams and module canvases generated from code by the Modulith `Documenter`
-- 🛡️ **Consistent API surface** — global exception handling, unified `ApiResponse<T>` envelope, request-ID (MDC) logging, Swagger UI
+- 🛡️ **Consistent API surface** — global exception handling (Spring MVC 404/405/400 included, not collapsed into 500), unified `ApiResponse<T>` envelope, request-ID (MDC) logging, Swagger UI
+- 🗄️ **Versioned schema** — Flyway migrations own the schema, `ddl-auto=validate` everywhere, `timestamptz` for every timestamp
 - 🧹 **Code quality gates** — ktlint and detekt wired into the build
 - 🐳 **Zero-setup local run** — `compose.yaml` + spring-boot-docker-compose starts PostgreSQL automatically
 
@@ -200,8 +201,14 @@ sequenceDiagram
 
 | Profile | Database | DDL | Notes |
 |---|---|---|---|
-| default (local) | auto-started via docker compose | `update` | Swagger UI, SQL logging enabled |
-| `prod` | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` env vars | `validate` | use a migration tool (e.g. Flyway) |
+| default (local) | auto-started via docker compose | `validate` | Swagger UI, SQL logging enabled |
+| `prod` | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` env vars | `validate` | — |
+
+The schema is owned by Flyway (`src/main/resources/db/migration`). Every entity
+change ships with a new `V{n}__*.sql`; Hibernate only validates that the two
+agree, in every profile and in every Testcontainers test. `V1__init.sql` also
+creates the Event Publication Registry tables, so a fresh database boots
+without manual steps.
 
 ## Contributing
 

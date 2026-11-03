@@ -54,7 +54,8 @@
 - 📬 **신뢰할 수 있는 이벤트** — Event Publication Registry가 모든 이벤트를 `event_publication` 테이블에 기록하고, 미완료 이벤트를 재기동 시 재발행
 - 🧪 **모듈 단위 테스트** — `@ApplicationModuleTest`로 모듈 하나만 부트스트랩, `Scenario` DSL로 이벤트 흐름 검증, Testcontainers PostgreSQL 사용
 - 📐 **살아있는 아키텍처 문서** — Modulith `Documenter`가 코드에서 C4/PlantUML 다이어그램과 모듈 캔버스를 자동 생성
-- 🛡️ **일관된 API 계층** — 전역 예외 처리, 통일된 `ApiResponse<T>` 응답 포맷, 요청 ID(MDC) 로깅, Swagger UI
+- 🛡️ **일관된 API 계층** — 전역 예외 처리(Spring MVC의 404/405/400도 500으로 뭉개지 않고 그대로 매핑), 통일된 `ApiResponse<T>` 응답 포맷, 요청 ID(MDC) 로깅, Swagger UI
+- 🗄️ **버전 관리되는 스키마** — Flyway 마이그레이션이 스키마를 소유하고, 모든 프로파일에서 `ddl-auto=validate`, 시각 컬럼은 전부 `timestamptz`
 - 🧹 **코드 품질 게이트** — ktlint, detekt 빌드 통합
 - 🐳 **설정 없는 로컬 실행** — `compose.yaml` + spring-boot-docker-compose로 PostgreSQL 자동 기동
 
@@ -199,8 +200,14 @@ sequenceDiagram
 
 | 프로파일 | 데이터베이스 | DDL | 비고 |
 |---|---|---|---|
-| default (local) | docker compose 자동 기동 | `update` | Swagger UI, SQL 로깅 활성화 |
-| `prod` | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` 환경변수 | `validate` | 마이그레이션 도구(Flyway 등) 사용 권장 |
+| default (local) | docker compose 자동 기동 | `validate` | Swagger UI, SQL 로깅 활성화 |
+| `prod` | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` 환경변수 | `validate` | — |
+
+스키마는 Flyway(`src/main/resources/db/migration`)가 관리합니다. 엔티티를
+바꾸면 새 `V{n}__*.sql`을 함께 추가하고, Hibernate는 모든 프로파일과
+Testcontainers 테스트에서 둘이 일치하는지만 검증합니다. `V1__init.sql`이
+Event Publication Registry 테이블까지 만들기 때문에 새 데이터베이스에서도
+수동 작업 없이 기동됩니다.
 
 ## 기여하기
 

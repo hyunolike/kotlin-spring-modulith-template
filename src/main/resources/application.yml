@@ -3,7 +3,7 @@ spring:
     name: kotlin-spring-modulith-template
   jpa:
     hibernate:
-      ddl-auto: update # 템플릿 편의용. 운영에서는 validate + 마이그레이션 도구(Flyway 등) 권장
+      ddl-auto: validate # 스키마는 Flyway(db/migration)가 관리한다. 엔티티와 어긋나면 기동 시 실패한다
     open-in-view: false
     properties:
       hibernate:
@@ -11,6 +11,7 @@ spring:
   modulith:
     events:
       republish-outstanding-events-on-restart: true
+      completion-mode: archive # 완료된 이벤트는 event_publication_archive로 옮겨 운영 테이블이 자라지 않게 한다
     runtime:
       verification-enabled: true # 기동 시에도 모듈 경계 검증 — 위반이 있으면 앱이 뜨지 않는다 (Modulith 2.0+)
 
