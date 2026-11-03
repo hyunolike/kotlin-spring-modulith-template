@@ -9,6 +9,9 @@ updates:
       kotlin:
         patterns:
           - "org.jetbrains.kotlin*"
+          # kotlin("jvm"), kotlin("plugin.spring") 같은 플러그인은 이 이름으로 잡힌다
+          - "jvm"
+          - "plugin.*"
       spring:
         patterns:
           - "org.springframework*"
