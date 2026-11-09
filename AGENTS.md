@@ -42,8 +42,13 @@ Modulith modules: `shared` (OPEN), `member`, `order`.
 - REST: paths under `/api/v1`, every response wrapped in `ApiResponse<T>`
   (`shared/response`), errors via `BusinessException` + `ErrorCode`
   (`shared/error`) handled by `GlobalExceptionHandler`.
-- Entities extend `BaseTimeEntity` (JPA auditing) and use table names that
-  avoid SQL reserved words (`members`, `orders`).
+- Entities extend `BaseTimeEntity` (JPA auditing, `Instant` → `timestamptz`) and
+  use table names that avoid SQL reserved words (`members`, `orders`). Timestamps
+  are never `LocalDateTime`: a zone-less column drifts when the app, DB and
+  analytics hosts run in different zones.
+- Every schema change ships as a Flyway migration next to the entity change
+  (`db/migration`). The Event Publication Registry tables
+  (`event_publication`, `event_publication_archive`) are part of that schema too.
 - Mutable entities carry a `@Version` column (optimistic locking); the
   resulting `OptimisticLockingFailureException` maps to 409
   `CONCURRENT_MODIFICATION`. A pre-check like `existsByEmail` is not race-safe —
@@ -78,8 +83,16 @@ Modulith modules: `shared` (OPEN), `member`, `order`.
   `build.gradle.kts` — do not remove those pins when bumping versions.
 - Local compose maps PostgreSQL to host port **5433** (5432 is often taken);
   spring-boot-docker-compose auto-detects the mapped port.
-- Adding a non-null column (e.g. `@Version`) under `ddl-auto: update` can fail on
-  a local DB that already has rows — reset it with `docker compose down -v`.
+- Schema is owned by Flyway (`src/main/resources/db/migration/V{n}__*.sql`) and
+  `ddl-auto` is `validate` in every profile — an entity change without a matching
+  migration fails at startup (and in every Testcontainers test). Never edit an
+  applied migration; add a new version. A local DB created before Flyway (by the
+  old `ddl-auto: update`) or one with an edited migration fails Flyway validation —
+  reset it with `docker compose down -v`.
+- `GlobalExceptionHandler` extends `ResponseEntityExceptionHandler` so Spring MVC
+  standard exceptions (404/405/400) keep their status instead of becoming 500. Do
+  not add `@ExceptionHandler` for an exception the parent already handles
+  (ambiguous mapping breaks startup) — change the body in `handleExceptionInternal`.
 - Testcontainers tests need a UTF-8 locale (`LANG=C.UTF-8`) because Korean test
   names become report file names.
 - `docs/` is intentionally git-ignored (local working documents).
