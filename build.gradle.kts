@@ -1,7 +1,7 @@
 plugins {
-    kotlin("jvm") version "2.4.10"
-    kotlin("plugin.spring") version "2.4.10"
-    kotlin("plugin.jpa") version "2.4.10"
+    kotlin("jvm") version "2.4.21"
+    kotlin("plugin.spring") version "2.4.21"
+    kotlin("plugin.jpa") version "2.4.21"
     id("org.springframework.boot") version "4.1.2"
     id("io.spring.dependency-management") version "1.1.7"
     id("org.jlleitschuh.gradle.ktlint") version "14.2.0"
@@ -65,8 +65,23 @@ allOpen {
     annotation("jakarta.persistence.Embeddable")
 }
 
+// ktlint-cli 1.7.1은 Kotlin 2.2.0 컴파일러에 의존한다. 두 버전은 함께 올린다.
+val ktlintVersion = "1.7.1"
+val ktlintKotlinVersion = "2.2.0"
+
 ktlint {
-    version.set("1.7.1") // Kotlin 2.2.21 호환 버전으로 고정
+    version.set(ktlintVersion)
+}
+
+// ktlint도 detekt처럼 자신이 컴파일된 Kotlin 버전으로 실행되어야 한다.
+// 프로젝트 Kotlin 버전(2.4.x)이 ktlint 설정까지 강제 상향되면
+// "Extensions storage is not registered"로 모든 ktlint 태스크가 실패한다.
+configurations.matching { it.name == "ktlint" }.all {
+    resolutionStrategy.eachDependency {
+        if (requested.group == "org.jetbrains.kotlin") {
+            useVersion(ktlintKotlinVersion)
+        }
+    }
 }
 
 detekt {
