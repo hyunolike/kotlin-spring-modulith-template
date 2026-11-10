@@ -54,8 +54,10 @@
 - 📬 **신뢰할 수 있는 이벤트** — Event Publication Registry가 모든 이벤트를 `event_publication` 테이블에 기록하고, 실패한 이벤트는 주기적으로 다시 제출(다중 인스턴스에서도 한 번만, 시도 횟수 제한)하며 완료된 이벤트는 보관 후 정리
 - 🧪 **모듈 단위 테스트** — `@ApplicationModuleTest`로 모듈 하나만 부트스트랩, `Scenario` DSL로 이벤트 흐름 검증, Testcontainers PostgreSQL 사용
 - 📐 **살아있는 아키텍처 문서** — Modulith `Documenter`가 코드에서 C4/PlantUML 다이어그램과 모듈 캔버스를 자동 생성
-- 🛡️ **일관된 API 계층** — 전역 예외 처리(Spring MVC의 404/405/400도 500으로 뭉개지 않고 그대로 매핑), 통일된 `ApiResponse<T>` 응답 포맷, 요청 ID(MDC) 로깅, Swagger UI
-- 🗄️ **버전 관리되는 스키마** — Flyway 마이그레이션이 스키마를 소유하고, 모든 프로파일에서 `ddl-auto=validate`, 시각 컬럼은 전부 `timestamptz`
+- 🛡️ **일관된 API 계층** — 전역 예외 처리(Spring MVC의 404/405/400도 500으로 뭉개지 않고 그대로 매핑), 통일된 `ApiResponse<T>` 응답 포맷, 목록 API용 `PageQuery` / `PageResponse`, Swagger UI
+- 🗄️ **모듈별로 버전 관리되는 스키마** — Flyway 마이그레이션이 스키마를 소유하며 모듈마다 폴더(`db/migration/<모듈>`)와 이력 테이블을 따로 둠. 모든 프로파일에서 `ddl-auto=validate`, 시각 컬럼은 전부 `timestamptz`
+- 🔭 **관측성** — 모든 로그에 요청 ID와 OpenTelemetry 추적 ID 기록(비동기 리스너 포함), W3C `traceparent` 전파, `prod`에서는 한 줄 JSON(ECS) 로그
+- 📦 **컨테이너 이미지** — 계층형 jar를 쓰는 멀티 스테이지 `Dockerfile`, root가 아닌 사용자로 실행
 - 🧹 **코드 품질 게이트** — ktlint, detekt 빌드 통합
 - 🐳 **설정 없는 로컬 실행** — `compose.yaml` + spring-boot-docker-compose로 PostgreSQL 자동 기동
 
@@ -95,16 +97,36 @@ curl -X POST localhost:8080/api/v1/members/1/deactivate
 curl "localhost:8080/api/v1/orders?memberId=1"   # status: CANCELLED
 ```
 
+목록 API는 페이지로 나눠 응답합니다. `?page=0&size=20`이 기본값이고 `size`는 100까지
+허용합니다. `data` 안에 `content`, `page`, `size`, `totalElements`, `totalPages`,
+`hasNext`가 담깁니다.
+
+### 컨테이너로 실행
+
+```bash
+docker build -t kotlin-spring-modulith-template .
+
+docker run --rm -p 8080:8080 \
+  -e DB_URL=jdbc:postgresql://<host>:5432/template \
+  -e DB_USERNAME=template -e DB_PASSWORD=template \
+  kotlin-spring-modulith-template
+```
+
+이미지는 `prod` 프로파일로 실행됩니다. 기동할 때 Flyway가 데이터베이스를 마이그레이션하고,
+로그는 한 줄 JSON으로 남으며, Swagger UI는 꺼져 있습니다. 테스트와 정적 분석은 CI가 맡고
+이미지 빌드는 jar만 만듭니다.
+
 ## 프로젝트 구조
 
 ```
 com.template
-├── TemplateApplication.kt     # 루트: 전역 인프라 설정 (@EnableAsync, @EnableJpaAuditing)
+├── TemplateApplication.kt     # 루트: 전역 인프라 설정 (@EnableAsync, @EnableScheduling, @Modulithic 등)
 ├── shared/                    # 공유 모듈 (OPEN) — 공통 응답, 예외, 설정
-│   ├── response/              #   ApiResponse, ErrorResponse
+│   ├── request/               #   PageQuery (목록 API 쿼리 파라미터)
+│   ├── response/              #   ApiResponse, ErrorResponse, PageResponse
 │   ├── error/                 #   ErrorCode, BusinessException, GlobalExceptionHandler
 │   ├── domain/                #   BaseTimeEntity (JPA Auditing)
-│   └── config/                #   OpenAPI 설정, MDC 로깅 필터
+│   └── config/                #   OpenAPI, 요청 ID 필터, 추적, 이벤트 레지스트리 운영 작업
 ├── member/                    # 회원 모듈
 │   ├── MemberApi.kt           #   파사드 인터페이스        (공개)
 │   ├── MemberInfo.kt          #   공개 DTO                (공개)
@@ -184,9 +206,10 @@ sequenceDiagram
 1. `com.template.<모듈명>` 패키지 생성
 2. 모듈 루트에는 공개 계약만 배치: 파사드 인터페이스, 공개 DTO, 이벤트
 3. 구현은 `application` / `domain` / `presentation` 하위 패키지에 배치
-4. 다른 모듈 접근은 파사드 호출 또는 이벤트 수신으로만 — 순환 의존 금지
-5. `@ApplicationModuleTest` 모듈 테스트 작성 (의존 모듈 파사드는 `@MockitoBean`으로 대체)
-6. `./gradlew test --tests "com.template.ModularityTests"` 로 경계 검증
+4. 모듈의 테이블은 `db/migration/<모듈명>/V1__*.sql`에 추가 — 모듈 전용 폴더이며 `V1`부터 시작
+5. 다른 모듈 접근은 파사드 호출 또는 이벤트 수신으로만 — 순환 의존 금지
+6. `@ApplicationModuleTest` 모듈 테스트 작성 (의존 모듈 파사드는 `@MockitoBean`으로 대체)
+7. `./gradlew test --tests "com.template.ModularityTests"` 로 경계 검증
 
 ## 테스트
 
@@ -199,20 +222,42 @@ sequenceDiagram
 - `ModularityTests` — 모듈 경계를 검증하고 아키텍처 문서(C4/PlantUML + 모듈
   캔버스)를 `build/spring-modulith-docs/`에 생성
 - `MemberModuleTests` / `OrderModuleTests` — `Scenario` DSL로 이벤트 발행·소비를
-  검증하는 모듈 단위 테스트
+  검증하는 모듈 단위 테스트. 자기 모듈과 `shared`의 마이그레이션만 실행
+- 모든 테이블은 테스트마다 실행 전에 비워집니다(`DatabaseCleanupListener`, 모든 Spring
+  테스트에 자동 등록). 테스트가 서로의 데이터에 기대지 않습니다
 
 ## 설정 프로파일
 
 | 프로파일 | 데이터베이스 | DDL | 비고 |
 |---|---|---|---|
-| default (local) | docker compose 자동 기동 | `validate` | Swagger UI, SQL 로깅 활성화 |
-| `prod` | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` 환경변수 | `validate` | Swagger UI와 API 문서 비활성화 |
+| default (local) | docker compose 자동 기동 | `validate` | Swagger UI, SQL 로깅, 사람이 읽는 로그 형식 |
+| `prod` | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` 환경변수 | `validate` | Swagger UI와 API 문서 비활성화, 한 줄 JSON(ECS) 로그 |
 
-스키마는 Flyway(`src/main/resources/db/migration`)가 관리합니다. 엔티티를
-바꾸면 새 `V{n}__*.sql`을 함께 추가하고, Hibernate는 모든 프로파일과
-Testcontainers 테스트에서 둘이 일치하는지만 검증합니다. `V1__init.sql`이
-Event Publication Registry 테이블까지 만들기 때문에 새 데이터베이스에서도
-수동 작업 없이 기동됩니다.
+### 스키마
+
+스키마는 Flyway가 관리하며 모듈별로 나뉩니다(`spring.modulith.runtime.flyway-enabled`).
+
+```
+src/main/resources/db/migration
+├── shared/V1__event_publication_registry.sql   # 이력: flyway_schema_history_shared
+├── member/V1__members.sql                      # 이력: flyway_schema_history_member
+└── order/V1__orders.sql                        # 이력: flyway_schema_history_order
+```
+
+모듈마다 마이그레이션 버전을 따로 매기고(폴더마다 `V1`부터 시작) 다른 모듈의 테이블을
+참조하지 않습니다. 그래서 모듈 사이에는 외래 키가 없습니다. 엔티티를 바꾸면 해당 모듈
+폴더에 새 `V{n}__*.sql`을 함께 추가하고, Hibernate는 모든 프로파일과 Testcontainers
+테스트에서 둘이 일치하는지만 검증합니다. 새 데이터베이스에서도 수동 작업 없이 기동됩니다.
+
+### 관측성
+
+모든 로그에는 요청 ID(`X-Request-Id`, 클라이언트가 보내지 않으면 새로 발급)와
+OpenTelemetry 추적 ID가 찍히고, 두 값 모두 비동기 이벤트 리스너까지 이어집니다.
+W3C `traceparent` 헤더가 들어오면 그 추적을 이어받습니다.
+
+수집기를 설정하기 전에는 아무것도 전송하지 않으므로 수집기 없이도 실행됩니다. 전송하려면
+표준 OpenTelemetry 환경 변수(예: `OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318`)를
+지정하고, 지표 전송은 `MANAGEMENT_OTLP_METRICS_EXPORT_ENABLED=true`로 켭니다.
 
 ## 기여하기
 

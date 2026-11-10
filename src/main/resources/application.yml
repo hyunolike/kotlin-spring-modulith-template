@@ -22,6 +22,27 @@ spring:
         resubmitted: 5m
     runtime:
       verification-enabled: true # 기동 시에도 모듈 경계 검증 — 위반이 있으면 앱이 뜨지 않는다 (Modulith 2.0+)
+      # 마이그레이션을 모듈별로 나눠 실행한다: db/migration/<모듈명>/V{n}__*.sql.
+      # 모듈마다 이력 테이블(flyway_schema_history_<모듈명>)과 버전 번호를 따로 가진다.
+      flyway-enabled: true
+
+management:
+  otlp:
+    metrics:
+      export:
+        # 기본값(true)이면 수집기가 없어도 1분마다 localhost:4318로 지표를 보내려다 실패 로그를 남긴다.
+        # OTLP 수집기를 붙일 때 켠다. 트레이스는 수집기 주소를 설정하기 전에는 전송하지 않는다.
+        enabled: false
+
+logging:
+  pattern:
+    # 로그 한 줄마다 요청 ID(MdcLoggingFilter)와 추적 ID(OpenTelemetry)를 찍는다.
+    # 비동기 리스너의 로그도 같은 값으로 묶인다.
+    correlation: "[%X{requestId:-},%X{traceId:-}] "
+  level:
+    # staleness 모니터가 1분마다 상태별로 "No stale publications … found"를 INFO로 남긴다 (하루 4천 줄 이상).
+    # 실패로 바뀐 이벤트는 event_publication 테이블의 status = 'FAILED'로 확인한다.
+    org.springframework.modulith.events.core.DefaultEventPublicationRegistry: warn
 
 springdoc:
   swagger-ui:
@@ -35,3 +56,15 @@ template:
     archive:
       retention: P30D # 완료 이벤트 보존 기간
       purge-cron: "0 0 4 * * *" # 매일 04:00에 보존 기간이 지난 완료 이벤트 삭제
+
+---
+# 운영이 아닌 환경(로컬, 테스트)에서만 켜는 설정
+spring:
+  config:
+    activate:
+      on-profile: "!prod"
+
+logging:
+  level:
+    com.template: debug
+    org.hibernate.SQL: debug

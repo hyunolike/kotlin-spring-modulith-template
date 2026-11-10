@@ -14,6 +14,9 @@ import org.junit.jupiter.api.Test
 import org.mockito.BDDMockito.given
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.context.annotation.Import
+import org.springframework.data.domain.PageRequest
+import org.springframework.data.domain.Pageable
+import org.springframework.data.domain.Sort
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.modulith.test.ApplicationModuleTest
 import org.springframework.modulith.test.Scenario
@@ -70,11 +73,41 @@ class OrderModuleTests(
         scenario
             .publish(MemberDeactivatedEvent(3L))
             .andWaitForStateChange(
-                { orderService.getOrders(3L) },
+                { orderService.getOrders(3L, Pageable.unpaged()).content },
                 { orders -> orders.isNotEmpty() && orders.all { it.status == OrderStatus.CANCELLED } },
             ).andVerify { orders ->
                 assertThat(orders).hasSize(2)
             }
+    }
+
+    @Test
+    fun `주문 목록은 요청한 크기만큼 페이지로 나눠 조회한다`() {
+        given(memberApi.getMemberWithSharedLock(4L)).willReturn(activeMember(4L))
+        val placed = (1..5).map { orderService.placeOrder(4L, "상품$it", BigDecimal("1000")) }
+        val latestFirst = Sort.by(Sort.Direction.DESC, "id")
+
+        val firstPage = orderService.getOrders(4L, PageRequest.of(0, 2, latestFirst))
+        val lastPage = orderService.getOrders(4L, PageRequest.of(2, 2, latestFirst))
+
+        assertThat(firstPage.totalElements).isEqualTo(5)
+        assertThat(firstPage.totalPages).isEqualTo(3)
+        assertThat(firstPage.content.map { it.id }).containsExactly(placed[4].id, placed[3].id)
+        assertThat(lastPage.content.map { it.id }).containsExactly(placed[0].id)
+        assertThat(lastPage.hasNext()).isFalse()
+    }
+
+    @Test
+    fun `모듈 테스트는 자기 모듈과 shared 모듈의 마이그레이션만 실행한다`() {
+        val tables =
+            jdbcTemplate.queryForList(
+                "select tablename from pg_tables where schemaname = current_schema()",
+                String::class.java,
+            )
+
+        assertThat(tables)
+            .contains("orders", "flyway_schema_history_order")
+            .contains("event_publication", "flyway_schema_history_shared")
+            .doesNotContain("members", "flyway_schema_history_member")
     }
 
     @Test

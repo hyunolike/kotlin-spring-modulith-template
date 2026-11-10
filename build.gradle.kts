@@ -22,6 +22,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("org.springframework.boot:spring-boot-starter-opentelemetry")
     implementation("tools.jackson.module:jackson-module-kotlin")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("org.springframework.modulith:spring-modulith-starter-core")
@@ -37,6 +38,7 @@ dependencies {
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
+    testImplementation("org.springframework.boot:spring-boot-starter-opentelemetry-test")
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.springframework.modulith:spring-modulith-starter-test")
     testImplementation("org.springframework.modulith:spring-modulith-docs")
@@ -103,4 +105,9 @@ configurations.matching { it.name == "detekt" }.all {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+}
+
+// 실행 가능한 bootJar 하나만 만든다. 의존성이 빠진 -plain.jar는 배포에 쓰이지 않고 build/libs/*.jar 패턴만 헷갈리게 한다.
+tasks.named<Jar>("jar") {
+    enabled = false
 }

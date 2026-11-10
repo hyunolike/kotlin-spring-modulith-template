@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
+import org.springframework.data.domain.Pageable
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.TransactionDefinition
 import org.springframework.transaction.support.TransactionTemplate
@@ -62,7 +63,7 @@ class OrderMemberConsistencyTests(
 
         // 3) 비활성화 이벤트 리스너가 커밋된 주문까지 보고 취소한다
         await().atMost(Duration.ofSeconds(10)).untilAsserted {
-            assertThat(orderService.getOrders(member.id).single { it.id == order.id }.status)
+            assertThat(ordersOf(member.id).single { it.id == order.id }.status)
                 .isEqualTo(OrderStatus.CANCELLED)
         }
     }
@@ -107,8 +108,10 @@ class OrderMemberConsistencyTests(
             .isInstanceOf(BusinessException::class.java)
             .extracting("errorCode")
             .isEqualTo(ErrorCode.MEMBER_DEACTIVATED)
-        assertThat(orderService.getOrders(member.id)).isEmpty()
+        assertThat(ordersOf(member.id)).isEmpty()
     }
+
+    private fun ordersOf(memberId: Long): List<OrderInfo> = orderService.getOrders(memberId, Pageable.unpaged()).content
 
     companion object {
         private const val BLOCKING_CHECK_MILLIS = 500L

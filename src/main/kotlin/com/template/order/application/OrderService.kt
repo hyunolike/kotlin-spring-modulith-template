@@ -7,6 +7,8 @@ import com.template.order.domain.Order
 import com.template.order.domain.OrderRepository
 import com.template.shared.error.BusinessException
 import com.template.shared.error.ErrorCode
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -34,7 +36,10 @@ class OrderService(
             .toInfo()
     }
 
-    fun getOrders(memberId: Long): List<OrderInfo> = orderRepository.findAllByMemberId(memberId).map { it.toInfo() }
+    fun getOrders(
+        memberId: Long,
+        pageable: Pageable,
+    ): Page<OrderInfo> = orderRepository.findAllByMemberId(memberId, pageable).map { it.toInfo() }
 
     private fun Order.toInfo(): OrderInfo =
         OrderInfo(id = id, memberId = memberId, productName = productName, amount = amount, status = status)

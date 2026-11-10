@@ -1,10 +1,14 @@
 package com.template.order.presentation
 
 import com.template.order.application.OrderService
+import com.template.shared.request.PageQuery
 import com.template.shared.response.ApiResponse
+import com.template.shared.response.PageResponse
 import jakarta.validation.Valid
+import org.springframework.data.domain.Sort
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.ModelAttribute
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
@@ -29,5 +33,14 @@ class OrderController(
     @GetMapping
     fun getOrders(
         @RequestParam memberId: Long,
-    ): ApiResponse<List<OrderResponse>> = ApiResponse.success(orderService.getOrders(memberId).map(OrderResponse::from))
+        @Valid @ModelAttribute pageQuery: PageQuery,
+    ): ApiResponse<PageResponse<OrderResponse>> {
+        val orders = orderService.getOrders(memberId, pageQuery.toPageable(LATEST_FIRST))
+        return ApiResponse.success(PageResponse.from(orders, OrderResponse::from))
+    }
+
+    companion object {
+        // ID는 생성 순서대로 증가하므로 최신순 정렬에 쓴다. 값이 겹치지 않아 페이지 경계에서 순서가 흔들리지 않는다.
+        private val LATEST_FIRST = Sort.by(Sort.Direction.DESC, "id")
+    }
 }

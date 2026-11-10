@@ -1,0 +1,11 @@
+# 이미지 빌드에 필요 없는 파일은 빌드 컨텍스트에서 뺀다 (전송 시간 단축, 캐시 무효화 방지)
+.git
+.github
+.gradle
+.idea
+.vscode
+build
+out
+docs
+compose.yaml
+**/*.md
