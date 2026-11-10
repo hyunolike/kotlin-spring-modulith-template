@@ -6,3 +6,10 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
+
+# API 문서와 Swagger UI는 운영 환경에 노출하지 않는다
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

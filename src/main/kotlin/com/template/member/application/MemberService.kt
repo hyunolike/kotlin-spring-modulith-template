@@ -7,6 +7,7 @@ import com.template.member.domain.Member
 import com.template.member.domain.MemberRepository
 import com.template.shared.error.BusinessException
 import com.template.shared.error.ErrorCode
+import com.template.shared.error.violatesConstraint
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.data.repository.findByIdOrNull
@@ -25,14 +26,21 @@ class MemberService(
         name: String,
         email: String,
     ): MemberInfo {
-        if (memberRepository.existsByEmail(email)) {
+        // 이메일은 대소문자를 구분하지 않는다. 소문자로 맞춘 값에 unique 제약이 걸려야 중복을 막을 수 있다.
+        val normalizedEmail = email.lowercase()
+        if (memberRepository.existsByEmail(normalizedEmail)) {
             throw BusinessException(ErrorCode.DUPLICATE_EMAIL)
         }
         // 위 사전 검사는 동시 요청 사이의 경쟁을 막지 못한다. 최종 방어선은 email unique 제약이다.
         return try {
-            memberRepository.saveAndFlush(Member(name = name, email = email)).toInfo()
+            memberRepository.saveAndFlush(Member(name = name, email = normalizedEmail)).toInfo()
         } catch (e: DataIntegrityViolationException) {
-            throw BusinessException(ErrorCode.DUPLICATE_EMAIL, cause = e)
+            // 길이 초과 같은 다른 무결성 오류까지 이메일 중복으로 바꾸지 않는다
+            throw if (e.violatesConstraint(EMAIL_UNIQUE_CONSTRAINT)) {
+                BusinessException(ErrorCode.DUPLICATE_EMAIL, cause = e)
+            } else {
+                e
+            }
         }
     }
 
@@ -56,4 +64,8 @@ class MemberService(
             ?: throw BusinessException(ErrorCode.MEMBER_NOT_FOUND)
 
     private fun Member.toInfo(): MemberInfo = MemberInfo(id = id, name = name, email = email, status = status)
+
+    companion object {
+        private const val EMAIL_UNIQUE_CONSTRAINT = "uk_members_email" // db/migration/V1__init.sql
+    }
 }

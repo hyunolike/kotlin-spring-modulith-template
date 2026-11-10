@@ -10,11 +10,28 @@ spring:
         default_batch_fetch_size: 100
   modulith:
     events:
-      republish-outstanding-events-on-restart: true
+      # 재시작 시 일괄 재발행은 끈다. 다른 인스턴스가 처리 중인 이벤트까지 다시 보내기 때문이다.
+      # 실패한 이벤트는 EventPublicationMaintenance가 주기적으로 다시 제출한다.
+      republish-outstanding-events-on-restart: false
       completion-mode: archive # 완료된 이벤트는 event_publication_archive로 옮겨 운영 테이블이 자라지 않게 한다
+      # 이 시간 넘게 끝나지 않은 이벤트는 FAILED로 바꿔 재제출 대상에 올린다 (처리 중 인스턴스가 죽은 경우 등).
+      # 리스너의 최대 실행 시간보다 길게 잡는다.
+      staleness:
+        published: 5m
+        processing: 5m
+        resubmitted: 5m
     runtime:
       verification-enabled: true # 기동 시에도 모듈 경계 검증 — 위반이 있으면 앱이 뜨지 않는다 (Modulith 2.0+)
 
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
+
+template:
+  events:
+    resubmission:
+      interval: PT1M # 실패한 이벤트를 다시 제출하는 주기
+      max-attempts: 10 # 첫 시도를 포함한 총 시도 횟수. 다 채우면 자동 재제출을 멈추고 FAILED로 남긴다
+    archive:
+      retention: P30D # 완료 이벤트 보존 기간
+      purge-cron: "0 0 4 * * *" # 매일 04:00에 보존 기간이 지난 완료 이벤트 삭제

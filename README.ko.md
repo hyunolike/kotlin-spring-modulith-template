@@ -51,7 +51,7 @@
 - 🧱 **강제되는 모듈 경계** — `ApplicationModules.verify()`가 경계 위반·순환 의존을 빌드 실패로 잡아냄
 - 🚦 **기동 시 검증** — 애플리케이션 부팅 시에도 동일한 모듈 검증 실행(`spring-modulith-runtime`); 경계가 깨진 아키텍처는 런타임에 도달하지 못함
 - 🔄 **두 가지 통신 패턴 기본 제공** — 동기 파사드 호출과 비동기 도메인 이벤트를 실제 동작하는 `member`/`order` 모듈로 시연
-- 📬 **신뢰할 수 있는 이벤트** — Event Publication Registry가 모든 이벤트를 `event_publication` 테이블에 기록하고, 미완료 이벤트를 재기동 시 재발행
+- 📬 **신뢰할 수 있는 이벤트** — Event Publication Registry가 모든 이벤트를 `event_publication` 테이블에 기록하고, 실패한 이벤트는 주기적으로 다시 제출(다중 인스턴스에서도 한 번만, 시도 횟수 제한)하며 완료된 이벤트는 보관 후 정리
 - 🧪 **모듈 단위 테스트** — `@ApplicationModuleTest`로 모듈 하나만 부트스트랩, `Scenario` DSL로 이벤트 흐름 검증, Testcontainers PostgreSQL 사용
 - 📐 **살아있는 아키텍처 문서** — Modulith `Documenter`가 코드에서 C4/PlantUML 다이어그램과 모듈 캔버스를 자동 생성
 - 🛡️ **일관된 API 계층** — 전역 예외 처리(Spring MVC의 404/405/400도 500으로 뭉개지 않고 그대로 매핑), 통일된 `ApiResponse<T>` 응답 포맷, 요청 ID(MDC) 로깅, Swagger UI
@@ -150,8 +150,13 @@ graph LR
 > 이 템플릿에서는 엄격하게 `order → member` 단방향입니다.
 
 이벤트는 Event Publication Registry(`event_publication` 테이블)에 저장됩니다.
-리스너가 실패하면 미완료 기록이 남고, `republish-outstanding-events-on-restart=true`
-설정으로 다음 기동 시 재발행됩니다:
+리스너가 실패하면 기록이 `FAILED`로 남고, `EventPublicationMaintenance`가 주기적으로
+다시 제출합니다(`template.events.resubmission.*`). 재제출은 DB에서 원자적으로 선점하므로
+인스턴스가 여러 대여도 같은 이벤트를 두 번 실행하지 않고, `max-attempts`를 채우면 멈추므로
+처리할 수 없는 이벤트가 무한히 재시도되지 않습니다. 처리 도중 멈춘 발행 건(인스턴스 종료 등)은
+`spring.modulith.events.staleness.*` 설정이 `FAILED`로 바꿉니다. 따라서 리스너는 같은 이벤트를
+두 번 받아도 결과가 같아야 합니다. 완료된 발행 건은 `event_publication_archive`로 옮겨지고
+`template.events.archive.retention`이 지나면 삭제됩니다:
 
 ```mermaid
 sequenceDiagram
@@ -171,7 +176,7 @@ sequenceDiagram
     O->>O: 해당 회원의 PLACED 주문 전체 취소
     O->>R: 발행 기록을 완료로 마킹
 
-    Note over R: 미완료 발행 건은<br/>재기동 시 재발행
+    Note over R: 실패한 발행 건은<br/>주기적으로 다시 제출
 ```
 
 ## 새 모듈 추가하기
@@ -201,7 +206,7 @@ sequenceDiagram
 | 프로파일 | 데이터베이스 | DDL | 비고 |
 |---|---|---|---|
 | default (local) | docker compose 자동 기동 | `validate` | Swagger UI, SQL 로깅 활성화 |
-| `prod` | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` 환경변수 | `validate` | — |
+| `prod` | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` 환경변수 | `validate` | Swagger UI와 API 문서 비활성화 |
 
 스키마는 Flyway(`src/main/resources/db/migration`)가 관리합니다. 엔티티를
 바꾸면 새 `V{n}__*.sql`을 함께 추가하고, Hibernate는 모든 프로파일과

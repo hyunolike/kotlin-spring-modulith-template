@@ -10,6 +10,7 @@ import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.context.annotation.Import
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.dao.OptimisticLockingFailureException
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.modulith.test.ApplicationModuleTest
@@ -45,6 +46,24 @@ class MemberModuleTests(
             .isInstanceOf(BusinessException::class.java)
             .extracting("errorCode")
             .isEqualTo(ErrorCode.DUPLICATE_EMAIL)
+    }
+
+    @Test
+    fun `대소문자만 다른 이메일은 같은 이메일로 보고 등록에 실패한다`() {
+        val member = memberService.register("김대문자", "Mixed.Case@Example.com")
+
+        assertThat(member.email).isEqualTo("mixed.case@example.com")
+        assertThatThrownBy { memberService.register("김소문자", "mixed.case@example.com") }
+            .isInstanceOf(BusinessException::class.java)
+            .extracting("errorCode")
+            .isEqualTo(ErrorCode.DUPLICATE_EMAIL)
+    }
+
+    @Test
+    fun `이메일 중복이 아닌 무결성 오류는 DUPLICATE_EMAIL로 바꾸지 않는다`() {
+        // 컬럼 길이(255)를 넘는 이름. HTTP 요청은 @Size가 먼저 막지만, 서비스 계층은 오류를 엉뚱하게 번역하면 안 된다.
+        assertThatThrownBy { memberService.register("가".repeat(256), "too-long-name@example.com") }
+            .isInstanceOf(DataIntegrityViolationException::class.java)
     }
 
     @Test
