@@ -87,7 +87,11 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
         }
 
     private fun validationMessage(e: MethodArgumentNotValidException): String =
-        e.bindingResult.fieldErrors.joinToString(", ") { "${it.field}: ${it.defaultMessage}" }
+        e.bindingResult.fieldErrors.joinToString(", ") {
+            // 타입 변환 실패(?size=abc)의 기본 메시지에는 클래스명과 입력값이 들어 있어 그대로 내보내지 않는다
+            val reason = if (it.isBindingFailure) "형식이 올바르지 않습니다." else it.defaultMessage
+            "${it.field}: $reason"
+        }
 
     /**
      * 필수 필드 누락·타입 불일치처럼 역직렬화 단계에서 실패하면 Bean Validation까지 가지 못한다.

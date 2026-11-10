@@ -13,3 +13,10 @@ springdoc:
     enabled: false
   swagger-ui:
     enabled: false
+
+# 운영 로그는 한 줄 JSON(ECS)으로 남긴다. 로그 수집기가 파싱 규칙 없이 읽을 수 있고,
+# MDC 값(requestId 등)은 별도 필드로 들어간다.
+logging:
+  structured:
+    format:
+      console: ecs

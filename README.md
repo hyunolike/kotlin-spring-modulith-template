@@ -53,8 +53,10 @@ simplicity.
 - 📬 **Reliable eventing** — Event Publication Registry persists every event to the `event_publication` table; failed ones are resubmitted on a schedule (multi-instance safe, capped attempts) and completed ones are archived then purged
 - 🧪 **Module-level testing** — `@ApplicationModuleTest` bootstraps one module at a time, with the `Scenario` DSL for event flows and Testcontainers for PostgreSQL
 - 📐 **Living architecture docs** — C4 / PlantUML diagrams and module canvases generated from code by the Modulith `Documenter`
-- 🛡️ **Consistent API surface** — global exception handling (Spring MVC 404/405/400 included, not collapsed into 500), unified `ApiResponse<T>` envelope, request-ID (MDC) logging, Swagger UI
-- 🗄️ **Versioned schema** — Flyway migrations own the schema, `ddl-auto=validate` everywhere, `timestamptz` for every timestamp
+- 🛡️ **Consistent API surface** — global exception handling (Spring MVC 404/405/400 included, not collapsed into 500), unified `ApiResponse<T>` envelope, `PageQuery` / `PageResponse` for list endpoints, Swagger UI
+- 🗄️ **Versioned schema, per module** — Flyway migrations own the schema and live in one folder per module (`db/migration/<module>`), each with its own history table; `ddl-auto=validate` everywhere, `timestamptz` for every timestamp
+- 🔭 **Observability** — request ID and OpenTelemetry trace ID on every log line (async listeners included), W3C `traceparent` propagation, one-line JSON (ECS) logs in `prod`
+- 📦 **Container image** — multi-stage `Dockerfile` with layered jar, non-root user
 - 🧹 **Code quality gates** — ktlint and detekt wired into the build
 - 🐳 **Zero-setup local run** — `compose.yaml` + spring-boot-docker-compose starts PostgreSQL automatically
 
@@ -94,16 +96,36 @@ curl -X POST localhost:8080/api/v1/members/1/deactivate
 curl "localhost:8080/api/v1/orders?memberId=1"   # status: CANCELLED
 ```
 
+List endpoints are paginated: `?page=0&size=20` (defaults; `size` is capped at
+100) and answer with `content`, `page`, `size`, `totalElements`, `totalPages`,
+`hasNext` inside `data`.
+
+### Run as a container
+
+```bash
+docker build -t kotlin-spring-modulith-template .
+
+docker run --rm -p 8080:8080 \
+  -e DB_URL=jdbc:postgresql://<host>:5432/template \
+  -e DB_USERNAME=template -e DB_PASSWORD=template \
+  kotlin-spring-modulith-template
+```
+
+The image runs with the `prod` profile: Flyway migrates the database on
+startup, logs are one-line JSON, and Swagger UI is off. Tests and static
+analysis are left to CI; the image build only assembles the jar.
+
 ## Project Structure
 
 ```
 com.template
-├── TemplateApplication.kt     # Root: global infra config (@EnableAsync, @EnableJpaAuditing)
+├── TemplateApplication.kt     # Root: global infra config (@EnableAsync, @EnableScheduling, @Modulithic, …)
 ├── shared/                    # Shared module (OPEN) — common response, errors, config
-│   ├── response/              #   ApiResponse, ErrorResponse
+│   ├── request/               #   PageQuery (list endpoint query parameters)
+│   ├── response/              #   ApiResponse, ErrorResponse, PageResponse
 │   ├── error/                 #   ErrorCode, BusinessException, GlobalExceptionHandler
 │   ├── domain/                #   BaseTimeEntity (JPA auditing)
-│   └── config/                #   OpenAPI config, MDC logging filter
+│   └── config/                #   OpenAPI, request-ID filter, tracing, event registry maintenance
 ├── member/                    # Member module
 │   ├── MemberApi.kt           #   Facade interface        (public)
 │   ├── MemberInfo.kt          #   Public DTO              (public)
@@ -187,9 +209,10 @@ sequenceDiagram
 1. Create a `com.template.<module>` package
 2. Put only the public contract in the module root: facade interface, public DTOs, events
 3. Implement inside `application` / `domain` / `presentation` sub-packages
-4. Reach other modules only via facades or events — never create cycles
-5. Write an `@ApplicationModuleTest` (mock dependency facades with `@MockitoBean`)
-6. Run `./gradlew test --tests "com.template.ModularityTests"` to verify boundaries
+4. Add the module's tables in `db/migration/<module>/V1__*.sql` — its own folder, starting at `V1`
+5. Reach other modules only via facades or events — never create cycles
+6. Write an `@ApplicationModuleTest` (mock dependency facades with `@MockitoBean`)
+7. Run `./gradlew test --tests "com.template.ModularityTests"` to verify boundaries
 
 ## Testing
 
@@ -202,20 +225,46 @@ sequenceDiagram
 - `ModularityTests` — verifies module boundaries and generates architecture
   docs (C4 / PlantUML + module canvases) into `build/spring-modulith-docs/`
 - `MemberModuleTests` / `OrderModuleTests` — module-scoped tests using the
-  `Scenario` DSL to assert event publication and consumption
+  `Scenario` DSL to assert event publication and consumption. Each one runs
+  only its own module's migrations (plus `shared`)
+- Every table is truncated before each test (`DatabaseCleanupListener`,
+  registered for all Spring tests), so tests never depend on each other's data
 
 ## Configuration Profiles
 
 | Profile | Database | DDL | Notes |
 |---|---|---|---|
-| default (local) | auto-started via docker compose | `validate` | Swagger UI, SQL logging enabled |
-| `prod` | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` env vars | `validate` | Swagger UI and API docs disabled |
+| default (local) | auto-started via docker compose | `validate` | Swagger UI, SQL logging, human-readable logs |
+| `prod` | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` env vars | `validate` | Swagger UI and API docs disabled, one-line JSON (ECS) logs |
 
-The schema is owned by Flyway (`src/main/resources/db/migration`). Every entity
-change ships with a new `V{n}__*.sql`; Hibernate only validates that the two
-agree, in every profile and in every Testcontainers test. `V1__init.sql` also
-creates the Event Publication Registry tables, so a fresh database boots
-without manual steps.
+### Schema
+
+The schema is owned by Flyway, split by module
+(`spring.modulith.runtime.flyway-enabled`):
+
+```
+src/main/resources/db/migration
+├── shared/V1__event_publication_registry.sql   # history: flyway_schema_history_shared
+├── member/V1__members.sql                      # history: flyway_schema_history_member
+└── order/V1__orders.sql                        # history: flyway_schema_history_order
+```
+
+Each module versions its own migrations (every folder starts at `V1`) and never
+references another module's tables, so there are no cross-module foreign keys.
+Every entity change ships with a new `V{n}__*.sql` in its module's folder;
+Hibernate only validates that the two agree, in every profile and in every
+Testcontainers test. A fresh database boots without manual steps.
+
+### Observability
+
+Every log line carries the request ID (`X-Request-Id`, generated when the
+client sends none) and the OpenTelemetry trace ID; both follow the work into
+async event listeners. An incoming W3C `traceparent` header is continued.
+
+Nothing is exported until a collector is configured, so the app runs without
+one. To ship telemetry, set the standard OpenTelemetry variables, e.g.
+`OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318`, and turn metrics export on
+with `MANAGEMENT_OTLP_METRICS_EXPORT_ENABLED=true`.
 
 ## Contributing
 

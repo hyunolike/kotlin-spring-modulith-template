@@ -119,6 +119,64 @@ class ApiValidationTests(
         assertThat(result).bodyJson().extractingPath("$.data").isNull()
     }
 
+    @Test
+    fun `주문 목록은 page와 size를 받아 페이지 정보와 함께 최신순으로 응답한다`() {
+        val created = post("/api/v1/members", """{"name":"목록회원","email":"paging@example.com"}""")
+        val memberId = Regex(""""id":(\d+)""").find(created.response.contentAsString)!!.groupValues[1]
+        repeat(3) { post("/api/v1/orders", """{"memberId":$memberId,"productName":"상품$it","amount":1000}""") }
+
+        val result = mvc.get().uri("/api/v1/orders?memberId=$memberId&page=0&size=2").exchange()
+
+        assertThat(result).hasStatusOk()
+        assertThat(result).bodyJson().extractingPath("$.data.content[*].productName").isEqualTo(listOf("상품2", "상품1"))
+        assertThat(result).bodyJson().extractingPath("$.data.page").isEqualTo(0)
+        assertThat(result).bodyJson().extractingPath("$.data.size").isEqualTo(2)
+        assertThat(result).bodyJson().extractingPath("$.data.totalElements").isEqualTo(3)
+        assertThat(result).bodyJson().extractingPath("$.data.totalPages").isEqualTo(2)
+        assertThat(result).bodyJson().extractingPath("$.data.hasNext").isEqualTo(true)
+    }
+
+    @Test
+    fun `page와 size를 생략하면 첫 페이지 20건을 응답한다`() {
+        val result = mvc.get().uri("/api/v1/orders?memberId=1").exchange()
+
+        assertThat(result).hasStatusOk()
+        assertThat(result).bodyJson().extractingPath("$.data.page").isEqualTo(0)
+        assertThat(result).bodyJson().extractingPath("$.data.size").isEqualTo(20)
+    }
+
+    @Test
+    fun `size가 상한 100을 넘거나 page가 음수면 400 INVALID_REQUEST로 응답한다`() {
+        val tooLarge = mvc.get().uri("/api/v1/orders?memberId=1&size=101").exchange()
+        val negative = mvc.get().uri("/api/v1/orders?memberId=1&page=-1").exchange()
+
+        assertThat(tooLarge).hasStatus(HttpStatus.BAD_REQUEST)
+        assertThat(tooLarge)
+            .bodyJson()
+            .extractingPath("$.error.message")
+            .asString()
+            .startsWith("size:")
+        assertThat(negative).hasStatus(HttpStatus.BAD_REQUEST)
+        assertThat(negative)
+            .bodyJson()
+            .extractingPath("$.error.message")
+            .asString()
+            .startsWith("page:")
+    }
+
+    @Test
+    fun `size가 숫자가 아니면 400으로 응답하고 변환 오류의 내부 메시지는 싣지 않는다`() {
+        val result = mvc.get().uri("/api/v1/orders?memberId=1&size=abc").exchange()
+
+        assertThat(result).hasStatus(HttpStatus.BAD_REQUEST)
+        assertThat(result)
+            .bodyJson()
+            .extractingPath("$.error.message")
+            .asString()
+            .startsWith("size:")
+            .doesNotContain("java.", "NumberFormatException", "Failed to convert")
+    }
+
     private fun post(
         uri: String,
         json: String,

@@ -17,6 +17,7 @@ Modulith modules: `shared` (OPEN), `member`, `order`.
 ./gradlew ktlintFormat                                      # auto-format (run before ktlintCheck on new code)
 ./gradlew bootRun                                           # local run (starts PostgreSQL via compose.yaml)
 ./gradlew clean build                                       # full verification before finishing work
+docker build -t kotlin-spring-modulith-template .           # container image (prod profile, no tests inside)
 ```
 
 ## Architecture Rules (enforced by tests — do not break)
@@ -51,9 +52,16 @@ Modulith modules: `shared` (OPEN), `member`, `order`.
   use table names that avoid SQL reserved words (`members`, `orders`). Timestamps
   are never `LocalDateTime`: a zone-less column drifts when the app, DB and
   analytics hosts run in different zones.
-- Every schema change ships as a Flyway migration next to the entity change
-  (`db/migration`). The Event Publication Registry tables
-  (`event_publication`, `event_publication_archive`) are part of that schema too.
+- Every schema change ships as a Flyway migration next to the entity change,
+  in the owning module's folder: `db/migration/<module>/V{n}__*.sql`
+  (`spring.modulith.runtime.flyway-enabled`). Each module has its own version
+  sequence and history table (`flyway_schema_history_<module>`). A migration
+  never touches another module's tables — no cross-module foreign keys. The
+  Event Publication Registry tables belong to `shared`.
+- List endpoints take `PageQuery` (`?page=&size=`, size capped at 100) and
+  return `PageResponse<T>` inside `ApiResponse`. Sorting is fixed per endpoint
+  in code; never accept Spring Data `Pageable` (client-controlled `sort`)
+  directly in a controller.
 - Mutable entities carry a `@Version` column (optimistic locking); the
   resulting `OptimisticLockingFailureException` maps to 409
   `CONCURRENT_MODIFICATION`. A pre-check like `existsByEmail` is not race-safe —
@@ -68,7 +76,11 @@ Modulith modules: `shared` (OPEN), `member`, `order`.
   `Propagation.MANDATORY`). A plain read lets the state change commit before
   the write does, and the change event's listener then misses the new row.
 - Async work (`@ApplicationModuleListener`) inherits the request's MDC via
-  `MdcTaskDecorator`, so logs keep the same `requestId`.
+  `MdcTaskDecorator` and its trace context via `ContextPropagatingTaskDecorator`
+  (`TracingConfig`), so logs keep the same `requestId` and `traceId`.
+- Logging is configured through `logging.*` properties only. Do not add a
+  `logback-spring.xml`: a custom appender bypasses `logging.structured.format.*`
+  (JSON logs in `prod`) and the correlation pattern.
 - Event listeners must be idempotent. A failed publication stays `FAILED` in the
   registry and `EventPublicationMaintenance` (`shared/config`) resubmits it on a
   schedule, up to `template.events.resubmission.max-attempts` tries in total;
@@ -82,8 +94,12 @@ Modulith modules: `shared` (OPEN), `member`, `order`.
 - Module tests use `@ApplicationModuleTest` + `TestcontainersConfiguration`;
   mock dependency facades with `@MockitoBean`; assert event flows with the
   `Scenario` DSL. Test names are Korean backtick sentences.
+- Tests never share data: `DatabaseCleanupListener` (registered in
+  `src/test/resources/META-INF/spring.factories`) truncates every table before
+  each test method. Do not rely on rows from another test or on test order.
 - Kotlin style is ktlint `ktlint_official`: no blank line at the start of a
   class body, explicit imports (no wildcards), trailing commas, max line 120.
+  `.editorconfig` carries the same settings for IDE formatting.
 
 ## Gotchas
 
@@ -101,12 +117,19 @@ Modulith modules: `shared` (OPEN), `member`, `order`.
   every ktlint task fails with "Extensions storage is not registered".
 - Local compose maps PostgreSQL to host port **5433** (5432 is often taken);
   spring-boot-docker-compose auto-detects the mapped port.
-- Schema is owned by Flyway (`src/main/resources/db/migration/V{n}__*.sql`) and
-  `ddl-auto` is `validate` in every profile — an entity change without a matching
-  migration fails at startup (and in every Testcontainers test). Never edit an
-  applied migration; add a new version. A local DB created before Flyway (by the
-  old `ddl-auto: update`) or one with an edited migration fails Flyway validation —
-  reset it with `docker compose down -v`.
+- Schema is owned by Flyway (`src/main/resources/db/migration/<module>/V{n}__*.sql`)
+  and `ddl-auto` is `validate` in every profile — an entity change without a
+  matching migration fails at startup (and in every Testcontainers test). Never
+  edit an applied migration; add a new version. A local DB created before the
+  per-module layout (single `V1__init.sql`), or one with an edited migration,
+  fails at startup — reset it with `docker compose down -v`.
+- `shared` is declared as a shared module (`@Modulithic(sharedModules = …)`), so
+  `@ApplicationModuleTest` always bootstraps it together with the module under
+  test, including its migrations. Modulith skips `db/migration/__root` in module
+  tests, so nothing that module tests need may live there.
+- Spring Boot turns tracing off in tests; a test that asserts trace IDs needs
+  `@AutoConfigureTracing`. The log format in tests is whatever the first loaded
+  context configured (logging is JVM-wide), so do not assert on log layout.
 - `GlobalExceptionHandler` extends `ResponseEntityExceptionHandler` so Spring MVC
   standard exceptions (404/405/400) keep their status instead of becoming 500. Do
   not add `@ExceptionHandler` for an exception the parent already handles
