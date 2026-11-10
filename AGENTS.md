@@ -79,8 +79,11 @@ Modulith modules: `shared` (OPEN), `member`, `order`.
 - Modulith config properties live under `spring.modulith.events.*` /
   `spring.modulith.runtime.*` — the bare `spring.modulith.republish-…` path is
   deprecated since 1.3.
-- detekt runs with a pinned Kotlin version and ktlint is pinned to 1.7.1 in
-  `build.gradle.kts` — do not remove those pins when bumping versions.
+- detekt and ktlint each run with a pinned Kotlin version in `build.gradle.kts`
+  (ktlint 1.7.1 is built against Kotlin 2.2.0, see `ktlintKotlinVersion`). Do not
+  remove those pins when bumping versions; bump ktlint and its Kotlin pin together.
+  Without the pin, the project Kotlin version leaks into the ktlint classpath and
+  every ktlint task fails with "Extensions storage is not registered".
 - Local compose maps PostgreSQL to host port **5433** (5432 is often taken);
   spring-boot-docker-compose auto-detects the mapped port.
 - Schema is owned by Flyway (`src/main/resources/db/migration/V{n}__*.sql`) and
