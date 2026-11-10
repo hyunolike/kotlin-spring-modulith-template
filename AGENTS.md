@@ -41,7 +41,12 @@ Modulith modules: `shared` (OPEN), `member`, `order`.
 
 - REST: paths under `/api/v1`, every response wrapped in `ApiResponse<T>`
   (`shared/response`), errors via `BusinessException` + `ErrorCode`
-  (`shared/error`) handled by `GlobalExceptionHandler`.
+  (`shared/error`) handled by `GlobalExceptionHandler`. A success with nothing
+  to return uses `ApiResponse.success()` (`data: null`), never `success(Unit)`.
+- Request DTOs mirror the column definitions they are stored in: `@Size(max = …)`
+  for every `varchar`, `@Digits` for every `numeric`. Without them an oversized
+  value surfaces as a 500 from the database, and an over-precise decimal is
+  silently rounded on write.
 - Entities extend `BaseTimeEntity` (JPA auditing, `Instant` → `timestamptz`) and
   use table names that avoid SQL reserved words (`members`, `orders`). Timestamps
   are never `LocalDateTime`: a zone-less column drifts when the app, DB and
@@ -53,7 +58,10 @@ Modulith modules: `shared` (OPEN), `member`, `order`.
   resulting `OptimisticLockingFailureException` maps to 409
   `CONCURRENT_MODIFICATION`. A pre-check like `existsByEmail` is not race-safe —
   back it with a DB unique constraint and translate
-  `DataIntegrityViolationException` into the matching `BusinessException`.
+  `DataIntegrityViolationException` into the matching `BusinessException`, but
+  only after checking which constraint failed (`violatesConstraint(name)` in
+  `shared/error`): the same exception also covers length and not-null violations.
+  Values compared case-insensitively (e-mail) are normalized before the check.
 - When a module writes based on another module's state (e.g. `order` placing
   an order only for an ACTIVE member), read that state through a locking
   facade method (`MemberApi.getMemberWithSharedLock`, `FOR SHARE`,
@@ -61,7 +69,14 @@ Modulith modules: `shared` (OPEN), `member`, `order`.
   the write does, and the change event's listener then misses the new row.
 - Async work (`@ApplicationModuleListener`) inherits the request's MDC via
   `MdcTaskDecorator`, so logs keep the same `requestId`.
-- Global infrastructure annotations (`@EnableAsync`, `@EnableJpaAuditing`)
+- Event listeners must be idempotent. A failed publication stays `FAILED` in the
+  registry and `EventPublicationMaintenance` (`shared/config`) resubmits it on a
+  schedule, up to `template.events.resubmission.max-attempts` tries in total;
+  stuck ones are failed by `spring.modulith.events.staleness.*`. Restart-time
+  republishing is off on purpose: it would replay events another instance is
+  still processing.
+- Global infrastructure annotations (`@EnableAsync`, `@EnableJpaAuditing`,
+  `@EnableScheduling`)
   live on `TemplateApplication`, not in a module — `@ApplicationModuleTest`
   bootstraps a single module and would miss module-local config.
 - Module tests use `@ApplicationModuleTest` + `TestcontainersConfiguration`;

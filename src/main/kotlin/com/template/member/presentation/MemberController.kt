@@ -36,6 +36,6 @@ class MemberController(
         @PathVariable memberId: Long,
     ): ApiResponse<Unit> {
         memberService.deactivate(memberId)
-        return ApiResponse.success(Unit)
+        return ApiResponse.success()
     }
 }

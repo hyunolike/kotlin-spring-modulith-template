@@ -50,7 +50,7 @@ simplicity.
 - 🧱 **Enforced module boundaries** — `ApplicationModules.verify()` fails the build on any boundary violation or dependency cycle
 - 🚦 **Startup verification** — the same module verification runs again when the application boots (`spring-modulith-runtime`); a violated architecture never reaches runtime
 - 🔄 **Two communication patterns out of the box** — synchronous facade calls and asynchronous domain events, demonstrated with working `member`/`order` modules
-- 📬 **Reliable eventing** — Event Publication Registry persists every event to the `event_publication` table and republishes incomplete ones on restart
+- 📬 **Reliable eventing** — Event Publication Registry persists every event to the `event_publication` table; failed ones are resubmitted on a schedule (multi-instance safe, capped attempts) and completed ones are archived then purged
 - 🧪 **Module-level testing** — `@ApplicationModuleTest` bootstraps one module at a time, with the `Scenario` DSL for event flows and Testcontainers for PostgreSQL
 - 📐 **Living architecture docs** — C4 / PlantUML diagrams and module canvases generated from code by the Modulith `Documenter`
 - 🛡️ **Consistent API surface** — global exception handling (Spring MVC 404/405/400 included, not collapsed into 500), unified `ApiResponse<T>` envelope, request-ID (MDC) logging, Swagger UI
@@ -151,8 +151,15 @@ graph LR
 > in the **same direction** — in this template, strictly `order → member`.
 
 Events are persisted in the Event Publication Registry (`event_publication`
-table). If a listener fails, the record remains incomplete, and
-`republish-outstanding-events-on-restart=true` replays it on the next startup:
+table). If a listener fails, the record stays there as `FAILED`, and
+`EventPublicationMaintenance` resubmits it on a schedule
+(`template.events.resubmission.*`). Resubmission is claimed atomically in the
+database, so several instances never replay the same event twice, and it stops
+after `max-attempts` so a poison event does not retry forever. Publications
+stuck mid-flight (e.g. the instance died) are flipped to `FAILED` by
+`spring.modulith.events.staleness.*`. Listeners must therefore be idempotent.
+Completed publications move to `event_publication_archive` and are purged after
+`template.events.archive.retention`:
 
 ```mermaid
 sequenceDiagram
@@ -172,7 +179,7 @@ sequenceDiagram
     O->>O: cancel all PLACED orders of the member
     O->>R: mark publication as completed
 
-    Note over R: incomplete publications are<br/>republished on restart
+    Note over R: failed publications are<br/>resubmitted on a schedule
 ```
 
 ## Adding a New Module
@@ -202,7 +209,7 @@ sequenceDiagram
 | Profile | Database | DDL | Notes |
 |---|---|---|---|
 | default (local) | auto-started via docker compose | `validate` | Swagger UI, SQL logging enabled |
-| `prod` | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` env vars | `validate` | — |
+| `prod` | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` env vars | `validate` | Swagger UI and API docs disabled |
 
 The schema is owned by Flyway (`src/main/resources/db/migration`). Every entity
 change ships with a new `V{n}__*.sql`; Hibernate only validates that the two

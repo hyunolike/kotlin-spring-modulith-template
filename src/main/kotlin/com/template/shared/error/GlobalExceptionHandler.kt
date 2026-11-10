@@ -7,11 +7,13 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.HttpStatusCode
 import org.springframework.http.ResponseEntity
+import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.context.request.WebRequest
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler
+import tools.jackson.core.JacksonException
 
 /**
  * 모든 오류 응답을 ApiResponse 형태로 통일한다.
@@ -59,7 +61,12 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
         request: WebRequest,
     ): ResponseEntity<Any> {
         val errorCode = errorCodeFor(statusCode)
-        val message = (ex as? MethodArgumentNotValidException)?.let(::validationMessage)
+        val message =
+            when (ex) {
+                is MethodArgumentNotValidException -> validationMessage(ex)
+                is HttpMessageNotReadableException -> unreadableFieldMessage(ex)
+                else -> null
+            }
         if (statusCode.is5xxServerError) {
             log.error("{}: {}", ex.javaClass.simpleName, ex.message, ex)
         } else {
@@ -81,4 +88,15 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
 
     private fun validationMessage(e: MethodArgumentNotValidException): String =
         e.bindingResult.fieldErrors.joinToString(", ") { "${it.field}: ${it.defaultMessage}" }
+
+    /**
+     * 필수 필드 누락·타입 불일치처럼 역직렬화 단계에서 실패하면 Bean Validation까지 가지 못한다.
+     * 어느 필드인지는 알려 주되, 파서 내부 메시지(클래스명 등)는 응답에 싣지 않는다.
+     */
+    private fun unreadableFieldMessage(e: HttpMessageNotReadableException): String? {
+        val path = (e.cause as? JacksonException)?.path.orEmpty()
+        if (path.isEmpty()) return null
+        val field = path.joinToString(".") { it.propertyName ?: "[${it.index}]" }
+        return "$field: 값이 없거나 형식이 올바르지 않습니다."
+    }
 }
